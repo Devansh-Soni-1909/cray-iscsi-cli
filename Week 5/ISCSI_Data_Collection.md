@@ -15,9 +15,9 @@ The system should retrieve the following attributes from worker nodes:
 
 ---
 
-## Recommended Approaches
+## Possible Approaches
 
-### 1. DaemonSet with HTTP Endpoint (Recommended)
+### 1. DaemonSet with HTTP Endpoint
 
 #### Architecture
 
