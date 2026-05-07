@@ -317,7 +317,7 @@ To configure a new ubuntu VM as iscsi-client to work with above iscsi-setup, run
    set -e
 
    # Add port if needed (eg: "192.168.122.197:3261" ), default port is 3260
-   TARGET_IP="192.168.122.197"
+   PORTAL="192.168.122.197:3260"
 
    CLIENT_IQN="iqn.2026-04.lab.local:node1.initiator"
    CHAP_USER="username"

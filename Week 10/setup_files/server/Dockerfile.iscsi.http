@@ -1,0 +1,37 @@
+FROM ubuntu:22.04
+
+# Install required packages
+RUN apt-get -y update && \
+    apt-get -y install --no-install-recommends \
+        python3 \
+        python3-pip \
+        util-linux \
+        iproute2 \
+        curl \
+        ca-certificates && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+RUN pip3 install --no-cache-dir \
+    flask==2.3.0 \
+    pyyaml
+
+# Create app directory
+WORKDIR /app
+
+# Copy scripts
+COPY http_server.py /app/http_server.py
+COPY iscsi-http-entrypoint.sh /entrypoint.sh
+
+# Make entrypoint executable
+RUN chmod +x /entrypoint.sh /app/http_server.py
+
+# Expose HTTP port
+EXPOSE 9000
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV TARGET_CONFIG_PATH=/host-sys/kernel/config/target
+
+ENTRYPOINT ["/entrypoint.sh"]

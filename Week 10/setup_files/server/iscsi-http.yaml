@@ -15,7 +15,7 @@ spec:
     spec:
       # Only run on nodes with iscsi-target role
       nodeSelector:
-        node-role.kubernetes.io/iscsi-target: ""
+        node-role.kubernetes.io/iscsi-target: "true"
 
       # Tolerate any taints on iscsi-target nodes
       tolerations:
