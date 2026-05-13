@@ -128,3 +128,29 @@ Slides should include:
 - What you learnt and next action items 
 - Demo video
 
+---
+
+Date: 13/05/26
+Mid Checkpoint Presentation
+
+Feedback & Next Action Items:
+
+- Enhance the CLI to retrieve iSCSI related data from the compute/initiator nodes as well 
+    - Mounted images
+    - Unmounted images
+- Add error reporting functionality to the CLI
+    - Look for errors in both iSCSI target and initiator nodes and report the same (How: look in dmesg (/var/log/message, /var/log/... ), beyond dmesg explore
+- If time permits, explore continuous monitoring and reporting (using nodeexporter, prometheus & grafana (GUI))
+- Optional: Try booting the client node using a boot image (using pixie boot)
+- Deadline till Mid-June 2026
+
+
+
+
+
+
+
+
+
+
+
