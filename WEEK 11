@@ -1,0 +1,398 @@
+iSCSI Diagnostics & Error Reporting Extension
+
+This document explains the architecture and implementation reasoning behind the new error reporting and diagnostics system added to the Python CLI metrics collector.
+
+The goal of this feature is to evolve the CLI from a simple metrics collector into a practical infrastructure diagnostics tool capable of detecting:
+
+iSCSI failures
+storage issues
+network problems
+kernel-level I/O failures
+initiator/target connectivity issues
+Table of Contents
+Overview
+Step 1 — NodeErrorReport Dataclass
+Step 2 — ERROR_PATTERNS
+Step 3 — collect_recent_logs()
+Step 4 — scan_logs_for_errors()
+Step 5 — Initiator Node Support
+Step 6 — collect_node_diagnostics()
+Architectural Design Decisions
+Future Improvements
+Overview
+
+Originally, the CLI only collected:
+
+iSCSI target information
+LUN statistics
+read metrics
+command counters
+
+The new diagnostics system introduces:
+
+log collection
+infrastructure error detection
+structured diagnostics
+subsystem categorization
+severity classification
+
+This allows the CLI to provide operational insights instead of only raw metrics.
+
+Step 1 — NodeErrorReport Dataclass
+Purpose
+
+The existing errors dictionary in the project only represented:
+
+Collector/runtime failures
+
+Examples:
+
+pdsh failed
+file read failed
+command execution failed
+
+However, the new requirement introduces:
+
+Actual infrastructure failures
+
+Examples:
+
+iSCSI connection loss
+I/O errors
+storage disconnects
+network timeouts
+
+These are fundamentally different concepts.
+
+Implementation
+from dataclasses import dataclass
+
+@dataclass
+class NodeErrorReport:
+    node: str
+    source: str
+    severity: str
+    message: str
+Why This Structure Matters
+
+This dataclass defines the diagnostic model used throughout the system.
+
+Instead of storing raw strings:
+
+all_errors.append(line)
+
+we now store structured diagnostics:
+
+NodeErrorReport(
+    node="worker-1",
+    source="iscsi",
+    severity="critical",
+    message="session recovery failed"
+)
+Field Explanation
+Field	Purpose
+node	Which node produced the issue
+source	Which subsystem produced the issue
+severity	How serious the issue is
+message	Actual log/error message
+Why Use @dataclass
+
+Benefits:
+
+cleaner code
+structured access
+easier serialization
+maintainability
+extensibility
+
+Example:
+
+error.node
+
+instead of:
+
+error["node"]
+Step 2 — ERROR_PATTERNS
+Purpose
+
+After collecting logs, the CLI still only sees:
+
+Raw text
+
+The system needs a way to determine:
+
+what is important
+what is dangerous
+which subsystem is affected
+
+This is done using pattern-based diagnostics detection.
+
+Implementation
+ERROR_PATTERNS = [
+    {
+        "pattern": r"connection.*lost",
+        "severity": "warning",
+        "source": "iscsi",
+    },
+    {
+        "pattern": r"session.*failure",
+        "severity": "warning",
+        "source": "iscsi",
+    },
+    {
+        "pattern": r"timed out",
+        "severity": "warning",
+        "source": "network",
+    },
+    {
+        "pattern": r"blocked for more than",
+        "severity": "critical",
+        "source": "kernel",
+    },
+    {
+        "pattern": r"I/O error",
+        "severity": "critical",
+        "source": "storage",
+    },
+    {
+        "pattern": r"rejecting I/O to offline device",
+        "severity": "critical",
+        "source": "storage",
+    },
+]
+Why Regex Is Used
+
+System logs vary across:
+
+Linux distributions
+kernel versions
+storage stacks
+
+Exact matching is fragile.
+
+Regex allows flexible matching.
+
+Example:
+
+r"connection.*lost"
+
+matches:
+
+connection lost
+connection unexpectedly lost
+iscsi connection lost
+Why Centralized Rules Matter
+
+Instead of:
+
+if "timed out" in line:
+elif "connection lost" in line:
+
+all rules are stored centrally.
+
+Benefits:
+
+easier maintenance
+cleaner parsing logic
+scalable detection system
+simpler future expansion
+Step 3 — collect_recent_logs()
+Purpose
+
+The CLI now needs to gather logs from:
+
+iSCSI target nodes
+initiator nodes
+
+However, different Linux environments store logs differently.
+
+Examples:
+
+RHEL → /var/log/messages
+Ubuntu → /var/log/syslog
+systemd environments → journalctl
+minimal systems → dmesg
+
+The collector must support all common environments.
+
+Implementation
+def collect_recent_logs(
+    node: str,
+    lines: int = 200,
+) -> Tuple[str, Optional[str]]:
+    commands = [
+        f"journalctl -n {lines} --no-pager 2>/dev/null",
+        f"tail -n {lines} /var/log/messages 2>/dev/null",
+        f"tail -n {lines} /var/log/syslog 2>/dev/null",
+        f"dmesg | tail -n {lines}",
+    ]
+
+    for command in commands:
+        output, error = run_pdsh_text(
+            f'pdsh -w {node} "{command}"'
+        )
+
+        if output:
+            return output, None
+
+    return "", f"{node}: unable to collect logs"
+Why Use Fallback Collection
+
+Different systems expose logs differently.
+
+This fallback chain ensures:
+
+better portability
+distro compatibility
+more reliable diagnostics
+Why Keep It Simple
+
+The implementation intentionally avoids:
+
+streaming log collectors
+async log pipelines
+external logging agents
+
+The goal is:
+
+operational simplicity
+maintainability
+CLI-focused diagnostics
+Step 4 — scan_logs_for_errors()
+Purpose
+
+After collecting logs, the CLI must:
+
+inspect log lines
+detect known failures
+classify them
+convert them into structured diagnostics
+Implementation
+def scan_logs_for_errors(
+    node: str,
+    log_text: str,
+) -> List[NodeErrorReport]:
+    findings: List[NodeErrorReport] = []
+
+    for line in log_text.splitlines():
+        lowered = line.lower()
+
+        for entry in ERROR_PATTERNS:
+            if re.search(entry["pattern"], lowered, re.IGNORECASE):
+                findings.append(
+                    NodeErrorReport(
+                        node=node,
+                        source=entry["source"],
+                        severity=entry["severity"],
+                        message=line.strip(),
+                    )
+                )
+
+    return findings
+How It Works
+Step 1
+
+Split logs into lines:
+
+log_text.splitlines()
+Step 2
+
+Iterate over every log line.
+
+Step 3
+
+Compare each line against every detection rule.
+
+Step 4
+
+Create structured diagnostic reports.
+
+Why Structured Parsing Matters
+
+Without parsing:
+
+logs remain noisy
+operators must inspect manually
+automation becomes difficult
+
+Structured diagnostics enable:
+
+filtering
+reporting
+alerting
+severity grouping
+Step 5 — Initiator Node Support
+Problem
+
+The original CLI only discovers:
+
+iscsi-target=true
+
+However, storage/network issues can occur on:
+
+initiator nodes
+worker nodes
+client nodes
+
+Diagnostics must support both sides.
+
+Implementation
+DEFAULT_INITIATOR_SELECTOR = "iscsi-initiator=true"
+
+CLI option:
+
+parser.add_argument(
+    "--initiator-selector",
+    default=DEFAULT_INITIATOR_SELECTOR,
+    help="Kubernetes label selector used to discover iSCSI initiator nodes",
+)
+Why Separate Selectors
+
+Target nodes and initiator nodes serve different roles.
+
+Keeping separate selectors:
+
+preserves flexibility
+avoids assumptions
+supports mixed environments
+Step 6 — collect_node_diagnostics()
+Purpose
+
+This function combines:
+
+log collection
+log scanning
+diagnostics generation
+
+into one reusable diagnostics workflow.
+
+Implementation
+def collect_node_diagnostics(
+    node: str,
+) -> Tuple[List[NodeErrorReport], List[str]]:
+    errors: List[str] = []
+
+    logs, log_error = collect_recent_logs(node)
+
+    if log_error:
+        return [], [log_error]
+
+    findings = scan_logs_for_errors(node, logs)
+
+    return findings, errors
+Why This Abstraction Is Useful
+
+This creates a reusable diagnostics pipeline.
+
+The main collection flow only needs:
+
+diagnostics, diagnostic_errors = collect_node_diagnostics(node)
+
+instead of managing:
+
+log collection
+parsing
+rule matching
+diagnostics construction
+
+separately.
