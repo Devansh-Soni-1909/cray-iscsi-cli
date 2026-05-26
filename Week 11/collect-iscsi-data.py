@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+#!/usr/bin/env python3
+
 from __future__ import annotations
 
 import argparse
@@ -12,6 +14,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 DEFAULT_NODE_SELECTOR = "iscsi-target=true"
+DEFAULT_INITIATOR_SELECTOR = "iscsi-role=initiator"
 DEFAULT_BASE_PATH = "/sys/kernel/config/target/iscsi"
 DEFAULT_STATE_FILE = Path(__file__).with_name("collect-iscsi-metrics-state.json")
 
@@ -323,7 +326,28 @@ def read_lun_stats(
         errors,
     )
 
+def collect_initiator_metrics(node: str) -> Tuple[Dict[str, int], List[str]]:
+    errors: List[str] = []
 
+    output, error = run_pdsh_text(
+        f'pdsh -w {node} "lsblk -o MOUNTPOINT,TRAN --noheadings | grep iscsi"'
+    )
+
+    if error:
+        errors.append(f"{node}: unable to collect initiator metrics: {error}")
+        return {"total": 0, "mounted": 0, "unmounted": 0}, errors
+
+    lines = [line for line in output.splitlines() if line.strip()]
+
+    total = len(lines)
+    mounted = sum(1 for line in lines if line.strip().startswith("/"))
+    unmounted = total - mounted
+
+    return {
+        "total": total,
+        "mounted": mounted,
+        "unmounted": unmounted,
+    }, errors
 def collect_node_images(
     node: str, base_path: str
 ) -> Tuple[List[LunImage], List[str], List[str]]:
@@ -485,6 +509,7 @@ def build_report(
     deleted_by_node: Dict[str, List[dict]],
     state_path: Path,
     errors: Dict[str, str],
+    initiator_stats: Dict[str, Dict],
 ) -> dict:
     summaries: List[dict] = []
     deleted_images: List[dict] = []
@@ -529,6 +554,7 @@ def build_report(
         "nodes_summary": summaries,
         "deleted_images": deleted_images,
         "errors": errors,
+        "initiator_stats": initiator_stats,
         "state_file": str(state_path),
         "defaults": {
             "node_selector": DEFAULT_NODE_SELECTOR,
@@ -684,6 +710,30 @@ def format_report(report: dict) -> str:
     else:
         lines.append("None")
 
+        lines.append("")
+    lines.append("Initiator node mount status")
+
+    initiator_stats = report.get("initiator_stats", {})
+
+    if initiator_stats:
+        initiator_rows = [
+            [
+                node,
+                str(stats["total"]),
+                str(stats["mounted"]),
+                str(stats["unmounted"]),
+            ]
+            for node, stats in initiator_stats.items()
+        ]
+
+        lines.append(
+            render_table(
+                ["Node", "Total", "Mounted", "Unmounted"],
+                initiator_rows,
+            )
+        )
+    else:
+        lines.append("None")
     if report["errors"]:
         lines.append("")
         lines.append("Warnings")
@@ -701,6 +751,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--node-selector",
         default=DEFAULT_NODE_SELECTOR,
         help="Kubernetes label selector used to discover iSCSI target nodes",
+    )
+    parser.add_argument(
+    "--initiator-selector",
+    default=DEFAULT_INITIATOR_SELECTOR,
+    help="Kubernetes label selector used to discover iSCSI initiator nodes",
     )
     parser.add_argument(
         "--base-path",
@@ -766,7 +821,24 @@ def main() -> int:
             "diagnostics": diagnostics,
           }
         )
+        initiator_nodes, initiator_error = get_target_nodes(
+        args.initiator_selector
+    )
 
+    if initiator_error:
+        errors["initiator_cluster"] = initiator_error
+
+    initiator_stats: Dict[str, Dict] = {}
+
+    for initiator_node in initiator_nodes:
+        stats, initiator_errors = collect_initiator_metrics(
+            initiator_node
+        )
+
+        initiator_stats[initiator_node] = stats
+
+        if initiator_errors:
+            errors[initiator_node] = "; ".join(initiator_errors)
     state = load_state(state_path)
     deleted_by_node = update_state_and_get_deleted(state, current_snapshots, nodes)
     state["generated_at"] = datetime.now(timezone.utc).isoformat()
@@ -774,7 +846,14 @@ def main() -> int:
     if not args.no_state_update:
         save_state(state_path, state)
 
-    report = build_report(nodes, node_results, deleted_by_node, state_path, errors)
+    report = build_report(
+    nodes,
+    node_results,
+    deleted_by_node,
+    state_path,
+    errors,
+    initiator_stats,
+)
 
     if args.json:
         print(json.dumps(report, indent=2, sort_keys=True))
