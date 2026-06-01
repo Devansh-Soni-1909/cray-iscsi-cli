@@ -5,8 +5,8 @@
 - 1 Master + 3 Worker Node VMs
 - OS = Ubuntu Server 24.04
 - Create 1 master-node vm with name master-node
-- Create 2 iscsi-target vms with names iscsi-target-1 & iscsi-target-2
-- Create 1 iscsi-client vm with name iscsi-client-1
+- Create 2 iscsi-target vms with names worker-node-1 & worker-node-2
+- Create 1 iscsi-client vm with name worker-node-3
 
 - Notes: Install OpenSSH Server during Ubuntu Installation
 
@@ -16,126 +16,132 @@
 
 Setup:
 
-- 10 LUNs ( Size = 50MB )
+10 Fileio Backstore Images + LUNs ( Size = 50MB )
 
-```
-Target
-└── TPG1
-    ├── lun0 -> disk01
-    ├── lun1 -> disk02
-    ├── ...
-    ├── lun9 -> disk10
-    └── ACLs
-         └── initiator IQN
-```
+- 2 Rootfs Images (eg: rootfs_disk01.img)
+- 8 PE Images (eg: pe_disk01.img)
+
+  ```
+  Target
+  └── TPG1
+     ├── lun0 -> rootfs_disk01
+     ├── lun1 -> rootfs_disk02
+     ├── ...
+     ├── lun9 -> pe_disk08
+     └── ACLs
+           └── initiator IQN
+  ```
 
 To configure a new ubuntu VM as iscsi-target with above architecture, run the following commands:
 
 1. Create a script file
 
-```
-nano iscsi-target-setup.sh
-```
+   ```
+   nano iscsi-target-setup.sh
+   ```
 
 2. Copy the below script into the file
 
-```bash
-#!/bin/bash
-set -e
+   ```bash
+   #!/bin/bash
+   set -e
 
-BASE_DIR="/var/lib/iscsi_disks"
-PORTAL_IP="0.0.0.0"
-PORTAL_PORT="3260"
+   BASE_DIR="/var/lib/iscsi_disks"
+   PORTAL_IP="0.0.0.0"
+   PORTAL_PORT="3260"
 
-CLIENT1="iqn.2026-04.lab.local:node1.initiator"
+   TARGET_IQN="iqn.2026-04.lab.local:lab.target01"
 
-CHAP_USER="username"
-CHAP_PASS="password"
+   echo "[+] Installing targetcli"
+   apt-get update
+   apt-get install -y targetcli-fb
 
-TARGET_IQN="iqn.2026-04.lab.local:lab.target01"
+   echo "[+] Creating disk directory"
+   mkdir -p ${BASE_DIR}
 
-echo "[+] Installing targetcli"
-apt-get update
-apt-get install -y targetcli-fb
+   echo "[+] Cleaning old disk images"
+   rm -f ${BASE_DIR}/*.img
 
-echo "[+] Creating disk directory"
-mkdir -p ${BASE_DIR}
+   echo "[+] Resetting existing target configuration"
+   targetcli clearconfig confirm=True || true
 
-echo "[+] Cleaning old disk images"
-rm -f ${BASE_DIR}/disk\*.img
+   echo "[+] Creating rootfs disks (2)"
 
-echo "[+] Resetting existing target configuration"
-targetcli clearconfig confirm=True || true
+   for i in $(seq -w 1 2); do
+      targetcli /backstores/fileio create \
+         rootfs_disk${i} \
+         ${BASE_DIR}/rootfs_disk${i}.img \
+         50M
+   done
 
-echo "[+] Creating 10 fileio backstore disks"
+   echo "[+] Creating PE disks (8)"
 
-for i in $(seq -w 1 10); do
-    targetcli /backstores/fileio create \
-        disk${i} \
-${BASE_DIR}/disk${i}.img \
-50M
-done
+   for i in $(seq -w 1 8); do
+      targetcli /backstores/fileio create \
+         pe_disk${i} \
+         ${BASE_DIR}/pe_disk${i}.img \
+         50M
+   done
 
-echo "[+] Creating iSCSI target"
-targetcli /iscsi create ${TARGET_IQN}
+   echo "[+] Creating iSCSI target"
+   targetcli /iscsi create ${TARGET_IQN}
 
-echo "[+] Creating portal"
-targetcli /iscsi/${TARGET_IQN}/tpg1/portals create \
-${PORTAL_IP} ${PORTAL_PORT} || true
+   echo "[+] Creating portal"
+   targetcli /iscsi/${TARGET_IQN}/tpg1/portals create \
+   ${PORTAL_IP} ${PORTAL_PORT} || true
 
-echo "[+] Enabling CHAP authentication"
-targetcli /iscsi/${TARGET_IQN}/tpg1 \
-set attribute authentication=1
+   echo "[+] Disabling authentication (no CHAP)"
+   targetcli /iscsi/${TARGET_IQN}/tpg1 set attribute authentication=0
 
-echo "[+] Creating ACL for initiator"
-targetcli /iscsi/${TARGET_IQN}/tpg1/acls create ${CLIENT1}
+   echo "[+] Enabling dynamic ACLs (allow all initiators)"
+   targetcli /iscsi/${TARGET_IQN}/tpg1 set attribute generate_node_acls=1
 
-echo "[+] Configuring CHAP credentials"
-targetcli /iscsi/${TARGET_IQN}/tpg1/acls/${CLIENT1} \
-set auth userid=${CHAP_USER}
+   echo "[+] Mapping rootfs disks as LUNs"
 
-targetcli /iscsi/${TARGET_IQN}/tpg1/acls/${CLIENT1} \
-set auth password=${CHAP_PASS}
+   for i in $(seq -w 1 2); do
+      targetcli /iscsi/${TARGET_IQN}/tpg1/luns create \
+         /backstores/fileio/rootfs_disk${i}
+   done
 
-echo "[+] Mapping all 10 disks as LUNs"
+   echo "[+] Mapping PE disks as LUNs"
 
-for i in $(seq -w 1 10); do
-    targetcli /iscsi/${TARGET_IQN}/tpg1/luns create \
-/backstores/fileio/disk${i}
-done
+   for i in $(seq -w 1 8); do
+      targetcli /iscsi/${TARGET_IQN}/tpg1/luns create \
+         /backstores/fileio/pe_disk${i}
+   done
 
-echo "[+] Saving configuration"
-targetcli saveconfig
+   echo "[+] Saving configuration"
+   targetcli saveconfig
 
-echo "[+] Enabling target service"
-systemctl enable rtslib-fb-targetctl
+   echo "[+] Enabling target service"
+   systemctl enable rtslib-fb-targetctl
 
-echo "[+] Setup complete"
-```
+   echo "[+] Setup complete"
+   ```
 
 3. Give execution permission to the script
 
-```
+   ```
 
-chmod +x iscsi-target-setup.sh
+   chmod +x iscsi-target-setup.sh
 
-```
+   ```
 
 4. Run the script as sudo user
 
-```
+   ```
 
-sudo ./iscsi-target-setup.sh
+   sudo ./iscsi-target-setup.sh
 
-```
+   ```
 
 5. Verify the setup
 
-```
+   ```
 
-sudo targetcli ls
+   sudo targetcli ls
 
-```
+   ```
 
 ### 2. iSCSI Client
 
@@ -155,14 +161,12 @@ To configure a new ubuntu VM as iscsi-client to work with above iscsi-setup, run
    #!/bin/bash
    set -e
 
-   # Add port if needed (eg: "192.168.122.197:3261" ), default port is 3260
-   PORTAL="192.168.122.189:3260"
+   # Target portal
+   PORTAL="192.168.122.242:3260"
 
    CLIENT_IQN="iqn.2026-04.lab.local:node1.initiator"
-   CHAP_USER="username"
-   CHAP_PASS="password"
 
-   echo "[+] Clearing previous iscsi-client configs"
+   echo "[+] Cleaning previous iSCSI client configuration"
    systemctl stop open-iscsi || true
    systemctl stop iscsid || true
    iscsiadm -m node --logout || true
@@ -178,14 +182,6 @@ To configure a new ubuntu VM as iscsi-client to work with above iscsi-setup, run
    echo "[+] Setting initiator IQN"
    sed -i "s|^InitiatorName=.*|InitiatorName=${CLIENT_IQN}|" /etc/iscsi/initiatorname.iscsi
 
-   echo "[+] Configuring CHAP authentication"
-   # Enable CHAP
-   sed -i 's|^#*node.session.auth.authmethod.*|node.session.auth.authmethod = CHAP|' /etc/iscsi/iscsid.conf
-
-   # Set username/password
-   sed -i "s|^[[:space:]]*#*node.session.auth.username.*|node.session.auth.username = ${CHAP_USER}|" /etc/iscsi/iscsid.conf
-   sed -i "s|^[[:space:]]*#*node.session.auth.password.*|node.session.auth.password = ${CHAP_PASS}|" /etc/iscsi/iscsid.conf
-
    echo "[+] Restarting services"
    systemctl restart iscsid
    systemctl restart open-iscsi
@@ -193,7 +189,7 @@ To configure a new ubuntu VM as iscsi-client to work with above iscsi-setup, run
    echo "[+] Discovering targets"
    iscsiadm -m discovery -t sendtargets -p ${PORTAL}
 
-   echo "[+] Logging into all discovered targets"
+   echo "[+] Logging into discovered targets"
    iscsiadm -m node --login || true
 
    echo "[+] Enabling auto-login on boot"
@@ -205,7 +201,7 @@ To configure a new ubuntu VM as iscsi-client to work with above iscsi-setup, run
    echo "[+] Checking block devices"
    lsblk
 
-   echo "iSCSI client setup complete"
+   echo "[+] iSCSI client setup complete"
    ```
 
 3. Verify the session and see the lun to disks mapping
@@ -394,8 +390,8 @@ To configure a new ubuntu VM as iscsi-client to work with above iscsi-setup, run
     Run this command on every worker node VM
 
     ```
-    kubeadm join 192.168.122.1:6443 --token 5vzqq9.qk5hdaobfoshd3nf \
-    --discovery-token-ca-cert-hash sha256:f7e1f9022eed85a2fb10f6e203f255f60b97c65d18ccc240f409ad172d8a2008
+    kubeadm join 192.168.122.244:6443 --token akr5qs.2sjct3gngrcmd7rz \
+    --discovery-token-ca-cert-hash sha256:fbf1d89ad0fef47ee89e56ae8fbbf13fcbcaf3205d8ad9d8f5c974fe1f04255b
     ```
 
     Replace the command with what you get after initialization
@@ -403,8 +399,8 @@ To configure a new ubuntu VM as iscsi-client to work with above iscsi-setup, run
 4.  Add iscsi-target label to target nodes in k8s cluster
 
     ```
-     kubectl label node iscsi-target-1 node-role.kubernetes.io/iscsi-target=true --overwrite
-     kubectl label node iscsi-target-2 node-role.kubernetes.io/iscsi-target=true --overwrite
+     kubectl label node worker-node-1 iscsi-target=true
+     kubectl label node worker-node-2 iscsi-target=true
     ```
 
 5.  Error Handling
@@ -453,83 +449,37 @@ To configure a new ubuntu VM as iscsi-client to work with above iscsi-setup, run
 
         - Reference: https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/
 
-## 4. Build & Push Docker Image
+## 4. Test the CLI Functionalities
 
-1. Build the docker image from the DockerFile in the setup folder
+- Run `python3 collect-iscsi-metrics.py`
 
-   ```
-   docker build -t iscsi-http:latest -f docker/Dockerfile.iscsi.http .
-   ```
+  ![cli-output](image.png)
 
-2. Tag the docker image ( Replace notmybug with your dockerhub username )
+- Check the state file content: `cat collect-iscsi-metrics-state.json`
 
-   ```
-   docker tag iscsi-http:latest notmybug/iscsi-http:latest
-   ```
+  ![state-file-content](image-1.png)
 
-3. Login to dockerhub
+## 5. Assumptions and Limitiations
 
-   ```
-   docker login
-   ```
+This collector assumes the following to work correctly:
 
-4. Push the docker image (Replace notmybug with your dockerhub username)
+- The cluster API is reachable and `kubectl get nodes` returns the worker nodes labeled as iSCSI targets.
+- The target nodes are selected by the label `iscsi-target=true` unless a different selector is passed.
+- `pdsh` is installed and can execute remote commands on those worker nodes.
+- The iSCSI target tree exists at `/sys/kernel/config/target/iscsi` unless overridden.
+- Each valid target is represented by an `iqn.*` directory with a `tpgt_1` child.
+- Each LUN is exposed as a `lun_*` directory under `.../tpgt_1/lun`.
+- Each LUN can be resolved to a backend object using `readlink -f`.
+- The backend object exposes `udev_path`, and that value is used as the stable image identity.
+- Image type is inferred from the identity string, mainly by matching `rootfs`, `pe`, or `pe_`.
+- The LUN stats files `read_mbytes` and `in_cmds` exist and contain parseable integer values.
+- Deleted images are detected by comparing the current `udev_path` snapshot to the previous snapshot stored in the JSON state file.
+- `--reset-state` starts deletion tracking fresh by clearing the saved state first.
+- `--no-state-update` allows a read-only run, but then deletion tracking will not advance for the next run.
 
-   ```
-   docker push notmybug/iscsi-http:latest
-   ```
+**Main limitations**:
 
-View my docker image here: https://hub.docker.com/r/notmybug/iscsi-http
-
-## 5. Run Daemonset and Service
-
-1. Create a new namespace for iscsi
-
-   ```
-   kubectl create namespace iscsi
-   ```
-
-1. Apply the `iscsi-http.yaml` to the kubernetes cluster
-
-   ```
-   kubectl -n iscsi apply -f setup/iscsi-http.yaml
-   ```
-
-1. Verify the status of daemonset and service deployed
-
-   ```
-   kubectl -n iscsi rollout status daemonset/iscsi-target-http
-   kubectl -n iscsi get pods -l app=iscsi-target-http -o wide
-   kubectl -n iscsi get ds iscsi-target-http -o yaml
-   ```
-
-## 6. Test the HTTP endpoint
-
-1. Port forward the service
-
-   ```
-   kubectl -n iscsi port-forward service/iscsi-target-http 9000:9000
-   ```
-
-2. Test the endpoint using curl or open the url in the browser
-
-   ```
-   curl http://localhost:9000/metrics/flat
-   curl http://localhost:9000/info
-   curl http://localhost:9000/metrics/flat
-   ```
-
-## 7. Fetch metrics using python CLI
-
-1. Install kubernetes python client
-
-   ```
-   sudo apt update
-   sudo apt install python3-kubernetes
-   ```
-
-2. Copy the python script to a local file
-3. Run the file
-   ```
-   python3 iscsi-metrics-cli.py
-   ```
+- Deleted-image reporting is only as accurate as the local JSON history. If the file is removed or reset, past deletions are forgotten.
+- If `udev_path` or the backend object name changes, the script may treat the same image as a different one.
+- If a target node is temporarily unreachable, its metrics may be missing or incomplete for that run.
+- The script currently relies on naming conventions to classify `rootfs` vs `pe`.

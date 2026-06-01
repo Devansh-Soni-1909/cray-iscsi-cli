@@ -128,3 +128,32 @@ Slides should include:
 - What you learnt and next action items 
 - Demo video
 
+---
+
+Date: 13/05/26
+Mid Checkpoint Presentation
+
+Feedback & Next Action Items:
+
+- Enhance the CLI to retrieve iSCSI related data from the compute/initiator nodes as well -> Pracheeta
+    - Mounted images
+    - Unmounted images
+- Add error reporting functionality to the CLI -> Sameer 
+    - Look for errors in both iSCSI target and initiator nodes and report the same (How: look in dmesg (/var/log/message, /var/log/... ), beyond dmesg explore
+- If time permits, explore continuous monitoring and reporting (using nodeexporter, prometheus & grafana (GUI)) -> Sasank & Devansh + Pracheeta (after first task)
+    - Use text file collector
+    - Reference: https://prometheus.io/docs/guides/node-exporter/
+- Deadline till Mid-June 2026
+
+- Optional: Try booting the client node using a boot image (using pixie boot)
+- Note: Try to write code on your own
+
+
+
+
+
+
+
+
+
+
