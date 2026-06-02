@@ -317,7 +317,6 @@ def read_lun_stats(
 
     if read_error:
         errors.append(f"{node}: unable to read {stats_path}: {read_error}")
-
     if read_mbytes_output == "":
         errors.append(f"{node}: missing read_mbytes value under {stats_path}")
     if read_iops_output == "":
@@ -396,7 +395,6 @@ def update_state_and_get_deleted(
             "deleted_history": deleted_history,
             "last_seen": now,
         }
-
     return deleted_by_node
 
 
