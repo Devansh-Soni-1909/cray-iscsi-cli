@@ -255,7 +255,6 @@ rootfs_disk2.img    1       rootfs
 ```bash
 iscsi get metrics \
     [--name NODE_NAME] \
-    [--base-path BASE_PATH] \
     [--state-file FILE] \
     [--json] \
     [--no-state-update] \
