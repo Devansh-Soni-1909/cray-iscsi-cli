@@ -26,7 +26,6 @@ from .common import (
     load_state,
     parse_metric_value,
     read_lun_stats,
-    read_udev_path,
     render_table,
     resolve_object_path,
     reset_state_file,
@@ -63,11 +62,7 @@ def collect_target_images(
                 f"{node}: unable to resolve object for {iqn}/{tpgt_name}/{lun_name}: {object_error}"
             )
 
-        udev_path, udev_error = read_udev_path(node, object_path)
-        if udev_error:
-            lun_errors.append(
-                f"{node}: unable to read udev_path for {iqn}/{tpgt_name}/{lun_name}: {udev_error}"
-            )
+        udev_path = object_path
 
         stats, stat_errors = read_lun_stats(node, lun_path, lun_name)
 

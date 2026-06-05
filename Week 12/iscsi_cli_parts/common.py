@@ -176,49 +176,114 @@ def detect_node_role(labels: Dict[str, str]) -> str:
         return "initiator"
     return "unknown"
 
+_saveconfig_cache: Dict[str, Tuple[Optional[dict], Optional[str]]] = {}
+
+
+def get_saveconfig(node: str) -> Tuple[Optional[dict], Optional[str]]:
+    if node in _saveconfig_cache:
+        cached_data, cached_error = _saveconfig_cache[node]
+        return cached_data, cached_error
+
+    paths = ["/etc/rtslib-fb-target/saveconfig.json", "/etc/target/saveconfig.json"]
+    last_error = None
+    for path in paths:
+        cmd = f'pdsh -w {node} "sudo cat {path} 2>/dev/null"'
+        output, error = run_pdsh_text(cmd)
+        if error:
+            last_error = error
+            continue
+        if not output.strip():
+            last_error = f"Empty file or file not found at {path}"
+            continue
+        try:
+            data = json.loads(output)
+            _saveconfig_cache[node] = (data, None)
+            return data, None
+        except Exception as e:
+            last_error = f"Failed to parse JSON from {path}: {e}"
+            continue
+
+    err_msg = f"{node}: unable to load saveconfig.json: {last_error}"
+    _saveconfig_cache[node] = (None, err_msg)
+    return None, err_msg
+
+
+def _parse_path(path: str) -> Tuple[Optional[str], Optional[int]]:
+    parts = path.rstrip("/").split("/")
+    iqn = None
+    tpgt_tag = None
+    for part in parts:
+        if part.startswith("iqn."):
+            iqn = part
+        elif part.startswith("tpgt_"):
+            try:
+                tpgt_tag = int(part.split("_")[1])
+            except (ValueError, IndexError):
+                pass
+    return iqn, tpgt_tag
+
 
 def list_iqns(node: str, base_path: str) -> Tuple[List[str], List[str]]:
-    errors: List[str] = []
-    iqns, error = run_pdsh_lines(
-        f"pdsh -w {node} \"find {base_path} -mindepth 1 -maxdepth 1 -type d -name 'iqn.*' -printf '%f\\n'\""
-    )
+    data, error = get_saveconfig(node)
     if error:
-        errors.append(f"{node}: unable to list targets: {error}")
-        return [], errors
-    return iqns, errors
+        return [], [error]
+    iqns = []
+    for target in data.get("targets", []):
+        if target.get("fabric") == "iscsi" and "wwn" in target:
+            iqns.append(target["wwn"])
+    return iqns, []
 
 
 def list_tpgts(node: str, iqn_path: str) -> Tuple[List[str], List[str]]:
-    errors: List[str] = []
-    tpgts, error = run_pdsh_lines(
-        f"pdsh -w {node} \"find {iqn_path} -mindepth 1 -maxdepth 1 -type d -name 'tpgt_*' -printf '%f\\n'\""
-    )
+    data, error = get_saveconfig(node)
     if error:
-        errors.append(f"{node}: unable to list TPGTs under {iqn_path}: {error}")
-        return [], errors
-    return tpgts, errors
+        return [], [error]
+    iqn = os.path.basename(iqn_path)
+    tpgts = []
+    for target in data.get("targets", []):
+        if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
+            for tpg in target.get("tpgs", []):
+                if "tag" in tpg:
+                    tpgts.append(f"tpgt_{tpg['tag']}")
+    return tpgts, []
 
 
 def list_luns(node: str, lun_path: str) -> Tuple[List[str], List[str]]:
-    errors: List[str] = []
-    luns, error = run_pdsh_lines(
-        f"pdsh -w {node} \"find {lun_path} -mindepth 1 -maxdepth 1 -type d -name 'lun_*' -printf '%f\\n'\""
-    )
+    data, error = get_saveconfig(node)
     if error:
-        errors.append(f"{node}: unable to list LUNs under {lun_path}: {error}")
-        return [], errors
-    return luns, errors
+        return [], [error]
+    iqn, tpgt_tag = _parse_path(lun_path)
+    if not iqn or tpgt_tag is None:
+        return [], [f"{node}: could not parse IQN/TPGT from path: {lun_path}"]
+    
+    luns = []
+    for target in data.get("targets", []):
+        if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
+            for tpg in target.get("tpgs", []):
+                if tpg.get("tag") == tpgt_tag:
+                    for lun in tpg.get("luns", []):
+                        if "index" in lun:
+                            luns.append(f"lun_{lun['index']}")
+    return luns, []
 
 
 def list_acls(node: str, acl_path: str) -> Tuple[List[str], List[str]]:
-    errors: List[str] = []
-    acls, error = run_pdsh_lines(
-        f"pdsh -w {node} \"find {acl_path} -mindepth 1 -maxdepth 1 -type d -printf '%f\\n'\""
-    )
+    data, error = get_saveconfig(node)
     if error:
-        errors.append(f"{node}: unable to list ACLs under {acl_path}: {error}")
-        return [], errors
-    return acls, errors
+        return [], [error]
+    iqn, tpgt_tag = _parse_path(acl_path)
+    if not iqn or tpgt_tag is None:
+        return [], [f"{node}: could not parse IQN/TPGT from path: {acl_path}"]
+    
+    acls = []
+    for target in data.get("targets", []):
+        if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
+            for tpg in target.get("tpgs", []):
+                if tpg.get("tag") == tpgt_tag:
+                    for acl in tpg.get("node_acls", []):
+                        if "node_wwn" in acl:
+                            acls.append(acl["node_wwn"])
+    return acls, []
 
 
 def parse_metric_value(raw_output: str) -> int:
@@ -236,38 +301,38 @@ def parse_metric_value(raw_output: str) -> int:
 def resolve_object_path(
     node: str, lun_path: str, lun_name: str
 ) -> Tuple[str, Optional[str]]:
-    commands = [
-        (
-            f'pdsh -w {node} "find {lun_path}/{lun_name} -mindepth 1 -maxdepth 1 '
-            '-type l -exec readlink -f {} \\; 2>/dev/null | grep /target/core/ | head -n1"'
-        ),
-        (
-            f'pdsh -w {node} "readlink -f {lun_path}/{lun_name}/* 2>/dev/null | '
-            'grep /target/core/ | head -n1"'
-        ),
-    ]
-
-    last_error: Optional[str] = None
-    for command in commands:
-        output, error = run_pdsh_text(command)
-        if output:
-            return output, None
-        if error:
-            last_error = error
-
-    if last_error:
-        return "", last_error
-    return "", f"{node}: no target core object link found for {lun_name}"
-
-
-def read_udev_path(node: str, object_path: str) -> Tuple[str, Optional[str]]:
-    if not object_path:
-        return "", None
-    command = f'pdsh -w {node} "cat {object_path}/udev_path 2>/dev/null"'
-    output, error = run_pdsh_text(command)
+    data, error = get_saveconfig(node)
     if error:
         return "", error
-    return output, None
+    iqn, tpgt_tag = _parse_path(lun_path)
+    if not iqn or tpgt_tag is None:
+        return "", f"{node}: could not parse IQN/TPGT from path: {lun_path}"
+    
+    try:
+        lun_index = int(lun_name.split("_")[1])
+    except (ValueError, IndexError):
+        return "", f"{node}: invalid LUN name format: {lun_name}"
+        
+    for target in data.get("targets", []):
+        if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
+            for tpg in target.get("tpgs", []):
+                if tpg.get("tag") == tpgt_tag:
+                    for lun in tpg.get("luns", []):
+                        if lun.get("index") == lun_index:
+                            storage_object = lun.get("storage_object")
+                            if storage_object:
+                                parts = storage_object.rstrip("/").split("/")
+                                if len(parts) >= 2:
+                                    plugin = parts[-2]
+                                    name = parts[-1]
+                                    for obj in data.get("storage_objects", []):
+                                        if obj.get("plugin") == plugin and obj.get("name") == name:
+                                            dev = obj.get("dev", "")
+                                            return dev, None
+                                    return "", f"{node}: storage object not found for plugin {plugin} name {name}"
+                                return "", f"{node}: invalid storage_object path format: {storage_object}"
+                            
+    return "", f"{node}: no storage_object found for target {iqn} TPGT {tpgt_tag} LUN {lun_index}"
 
 
 def infer_image_type(identity: str) -> str:
