@@ -33,7 +33,10 @@ from .common import (
     sum_metric,
 )
 from .error_reporting import collect_node_diagnostics
-from .initiator_configuration import build_initiator_node_summary
+from .initiator_configuration import (
+    build_initiator_mount_status,
+    build_initiator_node_summary,
+)
 
 CONFIGFS_TARGET_PATH = "/sys/kernel/config/target/iscsi"
 
@@ -529,14 +532,97 @@ def format_images_output(payload: dict) -> str:
     return "\n".join(lines).strip()
 
 
+def _format_initiator_sessions_summary(summary: dict) -> str:
+    lines = [
+        f"Node: {summary.get('node', 'unknown')}",
+        f"Role: {summary.get('role', 'initiator')}",
+        "",
+    ]
+    session_lines = summary.get("session_lines", [])
+    if session_lines:
+        lines.extend(session_lines)
+    else:
+        lines.append("No active sessions.")
+    if summary.get("errors"):
+        lines.append("")
+        lines.append("Warnings:")
+        lines.extend(f"- {message}" for message in summary["errors"])
+    return "\n".join(lines)
+
+
 def format_sessions_output(payload: dict) -> str:
     if "nodes" in payload:
-        lines = ["Initiator session status"]
+        lines = []
         for summary in payload["nodes"]:
-            lines.append(format_target_summary(summary))
+            lines.append(_format_initiator_sessions_summary(summary))
             lines.append("")
         return "\n".join(lines).strip()
-    return format_target_summary(payload)
+    return _format_initiator_sessions_summary(payload)
+
+
+def _format_mount_status_table(mounts: List[dict]) -> str:
+    headers = ["Image Name", "Status"]
+    rows = [
+        [entry.get("image_name") or entry.get("device", "-"), entry["status"]]
+        for entry in mounts
+    ]
+    if not rows:
+        return "No iSCSI devices found."
+
+    widths = [len(header) for header in headers]
+    for row in rows:
+        for index, value in enumerate(row):
+            widths[index] = max(widths[index], len(str(value)))
+
+    lines = [
+        "".join(
+            str(headers[index]).ljust(widths[index] + 2)
+            for index in range(len(headers))
+        ).rstrip(),
+        "-" * (sum(widths) + 2 * (len(headers) - 1)),
+    ]
+    for row in rows:
+        lines.append(
+            "".join(
+                str(row[index]).ljust(widths[index] + 2)
+                for index in range(len(row))
+            ).rstrip()
+        )
+    return "\n".join(lines)
+
+
+def _format_initiator_mount_status_summary(summary: dict) -> str:
+    lines = [
+        f"Node: {summary.get('node', 'unknown')}",
+        f"Role: {summary.get('role', 'initiator')}",
+        "",
+        _format_mount_status_table(summary.get("mounts", [])),
+    ]
+    if summary.get("errors"):
+        lines.append("")
+        lines.append("Warnings:")
+        lines.extend(f"- {message}" for message in summary["errors"])
+    return "\n".join(lines)
+
+
+def format_mount_status_output(payload: dict) -> str:
+    if "nodes" in payload:
+        nodes = payload["nodes"]
+        mounted_nodes = sum(
+            1
+            for summary in nodes
+            if summary.get("mounted", 0) > 0 and summary.get("unmounted", 0) == 0
+        )
+        unmounted_nodes = sum(1 for summary in nodes if summary.get("unmounted", 0) > 0)
+        lines = [
+            f"Mounted nodes: {mounted_nodes}, Unmounted nodes: {unmounted_nodes}",
+            "",
+        ]
+        for summary in nodes:
+            lines.append(_format_initiator_mount_status_summary(summary))
+            lines.append("")
+        return "\n".join(lines).strip()
+    return _format_initiator_mount_status_summary(payload)
 
 
 def _collect_summaries_concurrently(nodes: Sequence[str], base_path: str) -> List[dict]:
@@ -562,6 +648,21 @@ def _collect_initiator_summaries_concurrently(nodes: Sequence[str]) -> List[dict
     with ThreadPoolExecutor(max_workers=min(32, len(nodes))) as executor:
         futures = {
             executor.submit(build_initiator_node_summary, node): node for node in nodes
+        }
+        for future in as_completed(futures):
+            results.append(future.result())
+    order = {node: index for index, node in enumerate(nodes)}
+    results.sort(key=lambda item: order.get(item.get("node", ""), 0))
+    return results
+
+
+def _collect_initiator_mount_status_concurrently(nodes: Sequence[str]) -> List[dict]:
+    if not nodes:
+        return []
+    results: List[dict] = []
+    with ThreadPoolExecutor(max_workers=min(32, len(nodes))) as executor:
+        futures = {
+            executor.submit(build_initiator_mount_status, node): node for node in nodes
         }
         for future in as_completed(futures):
             results.append(future.result())
@@ -928,3 +1029,14 @@ def cmd_get_sessions(args) -> None:
             raise SystemExit(error)
         payload = {"nodes": _collect_initiator_summaries_concurrently(nodes)}
     emit_output(payload, args.json, formatter=format_sessions_output)
+
+
+def cmd_get_mount_status(args) -> None:
+    if args.name:
+        payload = build_initiator_mount_status(args.name)
+    else:
+        nodes, error = get_target_nodes(args.label)
+        if error:
+            raise SystemExit(error)
+        payload = {"nodes": _collect_initiator_mount_status_concurrently(nodes)}
+    emit_output(payload, args.json, formatter=format_mount_status_output)
