@@ -176,6 +176,7 @@ def detect_node_role(labels: Dict[str, str]) -> str:
         return "initiator"
     return "unknown"
 
+
 _saveconfig_cache: Dict[str, Tuple[Optional[dict], Optional[str]]] = {}
 
 
@@ -223,6 +224,38 @@ def _parse_path(path: str) -> Tuple[Optional[str], Optional[int]]:
     return iqn, tpgt_tag
 
 
+def list_config_versions(node: str) -> Tuple[List[str], str | None]:
+    paths = ["/etc/rtslib-fb-target/backup", "/etc/target/backup"]
+    last_error = None
+    for path in paths:
+        cmd = f'pdsh -w {node} "sudo ls {path} 2>/dev/null"'
+        output, error = run_pdsh_lines(cmd)
+        if error:
+            last_error = error
+            continue
+        if not output or len(output) == 0:
+            last_error = f"Empty directory or No directory found at the {path}"
+            continue
+        if output:
+            output = [f"{path}/{file}" for file in output]
+            return output, None
+    return None, last_error
+
+
+def read_backup_config_file(node: str, path: str):
+    cmd = f'pdsh -w {node} "sudo gzip -dc {path}"'
+    output, error = run_pdsh_text(cmd)
+    if error:
+        return None, error
+    if not output.strip() or len(output) == 0:
+        return None, f"Empty file or file not found at {path}"
+    try:
+        data = json.loads(output)
+        return data, None
+    except Exception as e:
+        return None, f"Failed to parse JSON from {path}: {e}"
+
+
 def list_iqns(node: str, base_path: str) -> Tuple[List[str], List[str]]:
     data, error = get_saveconfig(node)
     if error:
@@ -255,7 +288,7 @@ def list_luns(node: str, lun_path: str) -> Tuple[List[str], List[str]]:
     iqn, tpgt_tag = _parse_path(lun_path)
     if not iqn or tpgt_tag is None:
         return [], [f"{node}: could not parse IQN/TPGT from path: {lun_path}"]
-    
+
     luns = []
     for target in data.get("targets", []):
         if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
@@ -274,7 +307,7 @@ def list_acls(node: str, acl_path: str) -> Tuple[List[str], List[str]]:
     iqn, tpgt_tag = _parse_path(acl_path)
     if not iqn or tpgt_tag is None:
         return [], [f"{node}: could not parse IQN/TPGT from path: {acl_path}"]
-    
+
     acls = []
     for target in data.get("targets", []):
         if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
@@ -307,12 +340,12 @@ def resolve_object_path(
     iqn, tpgt_tag = _parse_path(lun_path)
     if not iqn or tpgt_tag is None:
         return "", f"{node}: could not parse IQN/TPGT from path: {lun_path}"
-    
+
     try:
         lun_index = int(lun_name.split("_")[1])
     except (ValueError, IndexError):
         return "", f"{node}: invalid LUN name format: {lun_name}"
-        
+
     for target in data.get("targets", []):
         if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
             for tpg in target.get("tpgs", []):
@@ -326,13 +359,25 @@ def resolve_object_path(
                                     plugin = parts[-2]
                                     name = parts[-1]
                                     for obj in data.get("storage_objects", []):
-                                        if obj.get("plugin") == plugin and obj.get("name") == name:
+                                        if (
+                                            obj.get("plugin") == plugin
+                                            and obj.get("name") == name
+                                        ):
                                             dev = obj.get("dev", "")
                                             return dev, None
-                                    return "", f"{node}: storage object not found for plugin {plugin} name {name}"
-                                return "", f"{node}: invalid storage_object path format: {storage_object}"
-                            
-    return "", f"{node}: no storage_object found for target {iqn} TPGT {tpgt_tag} LUN {lun_index}"
+                                    return (
+                                        "",
+                                        f"{node}: storage object not found for plugin {plugin} name {name}",
+                                    )
+                                return (
+                                    "",
+                                    f"{node}: invalid storage_object path format: {storage_object}",
+                                )
+
+    return (
+        "",
+        f"{node}: no storage_object found for target {iqn} TPGT {tpgt_tag} LUN {lun_index}",
+    )
 
 
 def infer_image_type(identity: str) -> str:
@@ -393,74 +438,81 @@ def read_lun_stats(
     }, errors
 
 
-def load_state(path: Path) -> dict:
-    if not path.exists():
-        return {"version": 1, "generated_at": None, "nodes": {}}
-    try:
-        with path.open("r", encoding="utf-8") as handle:
-            data = json.load(handle)
-            if isinstance(data, dict):
-                data.setdefault("version", 1)
-                data.setdefault("generated_at", None)
-                data.setdefault("nodes", {})
-                return data
-    except (OSError, json.JSONDecodeError):
-        pass
-    return {"version": 1, "generated_at": None, "nodes": {}}
+def build_snapshot(config: dict) -> dict:
+    snapshot = {
+        "iqns": set(),
+        "tpgs": set(),
+        "luns": set(),
+        "acls": set(),
+        "storage_objects": set(),
+        "rootfs_images": set(),
+        "pe_images": set(),
+    }
 
+    for obj in config.get("storage_objects", []):
+        name = obj.get("name", "")
+        plugin = obj.get("plugin", "")
+        path = obj.get("dev", "")
 
-def save_state(path: Path, state: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        json.dump(state, handle, indent=2, sort_keys=True)
+        snapshot["storage_objects"].add((plugin, name, path))
+        image_type = infer_image_type(name)
+        if image_type == "unknown":
+            image_type = infer_image_type(path)
 
+        if image_type == "rootfs":
+            snapshot["rootfs_images"].add((name, path))
+        elif image_type == "pe":
+            snapshot["pe_images"].add((name, path))
 
-def reset_state_file(path: Path) -> None:
-    if path.exists():
-        path.unlink()
+    for target in config.get("targets", []):
+        if target.get("fabric") != "iscsi":
+            continue
 
+        iqn = target.get("wwn")
+        snapshot["iqns"].add(iqn)
 
-def snapshot_images_by_node(images: List[LunImage]) -> Dict[str, Dict[str, dict]]:
-    snapshot: Dict[str, Dict[str, dict]] = {}
-    for image in images:
-        snapshot.setdefault(image.node, {})[image.udev_path] = asdict(image)
+        for tpg in target.get("tpgs", []):
+            tag = tpg.get("tag")
+            snapshot["tpgs"].add((iqn, tag))
+
+            for lun in tpg.get("luns", []):
+                snapshot["luns"].add(
+                    (iqn, tag, lun.get("index"), lun.get("storage_object"))
+                )
+
+            for acl in tpg.get("node_acls", []):
+                snapshot["acls"].add(
+                    (
+                        iqn,
+                        tag,
+                        acl.get("node_wwn"),
+                    )
+                )
     return snapshot
 
 
-def update_state_and_get_deleted(
-    state: dict,
-    current_snapshots: Dict[str, Dict[str, dict]],
-    nodes: Sequence[str],
-) -> Dict[str, List[dict]]:
-    deleted_by_node: Dict[str, List[dict]] = {}
-    nodes_state = state.setdefault("nodes", {})
-    now = datetime.now(timezone.utc).isoformat()
+def compare_snapshots(
+    current_snapshot: dict,
+    previous_snapshot: dict,
+) -> dict:
 
-    for node in nodes:
-        current_images = current_snapshots.get(node, {})
-        previous_state = nodes_state.get(node, {})
-        previous_images = {}
-        deleted_history: List[dict] = []
-
-        if isinstance(previous_state, dict):
-            previous_images = previous_state.get("previous_images", {}) or {}
-            deleted_history = list(previous_state.get("deleted_history", []))
-
-        removed_keys = sorted(set(previous_images) - set(current_images))
-        removed_images: List[dict] = []
-        for key in removed_keys:
-            record = previous_images.get(key, {})
-            if isinstance(record, dict):
-                removed_images.append(record)
-
-        deleted_history.extend(removed_images)
-        deleted_by_node[node] = removed_images
-        nodes_state[node] = {
-            "previous_images": current_images,
-            "deleted_history": deleted_history,
-            "last_seen": now,
-        }
-    return deleted_by_node
+    return {
+        "iqns_added": current_snapshot["iqns"] - previous_snapshot["iqns"],
+        "iqns_removed": previous_snapshot["iqns"] - current_snapshot["iqns"],
+        "tpgs_added": current_snapshot["tpgs"] - previous_snapshot["tpgs"],
+        "tpgs_removed": previous_snapshot["tpgs"] - current_snapshot["tpgs"],
+        "luns_added": current_snapshot["luns"] - previous_snapshot["luns"],
+        "luns_removed": previous_snapshot["luns"] - current_snapshot["luns"],
+        "acls_added": current_snapshot["acls"] - previous_snapshot["acls"],
+        "acls_removed": previous_snapshot["acls"] - current_snapshot["acls"],
+        "storage_objects_added": current_snapshot["storage_objects"]
+        - previous_snapshot["storage_objects"],
+        "storage_objects_removed": previous_snapshot["storage_objects"]
+        - current_snapshot["storage_objects"],
+        "rootfs_deleted": previous_snapshot["rootfs_images"]
+        - current_snapshot["rootfs_images"],
+        "pe_deleted": previous_snapshot["pe_images"] - current_snapshot["pe_images"],
+    }
 
 
 def count_by_type(images: List[LunImage]) -> Dict[str, int]:
