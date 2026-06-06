@@ -1,9 +1,40 @@
 from __future__ import annotations
 
+import os
 from typing import Dict, List, Tuple
 
 from .common import run_pdsh_lines, run_pdsh_text
 from .error_reporting import collect_node_diagnostics
+
+
+def _image_name_from_mount_entry(device_name: str, mount_point: str) -> str:
+    if mount_point.startswith("/"):
+        return os.path.basename(mount_point.rstrip("/")) or device_name
+    return device_name
+
+
+def _parse_lsblk_iscsi_lines(output: str) -> List[dict]:
+    mounts: List[dict] = []
+    for line in output.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        parts = stripped.split()
+        if len(parts) < 2 or parts[-1] != "iscsi":
+            continue
+        device_name = parts[0]
+        mount_point = " ".join(parts[1:-1]) if len(parts) > 2 else ""
+        status = "mounted" if mount_point.startswith("/") else "unmounted"
+        mounts.append(
+            {
+                "device": f"/dev/{device_name}",
+                "image_name": _image_name_from_mount_entry(device_name, mount_point),
+                "mount_point": mount_point,
+                "status": status,
+            }
+        )
+    mounts.sort(key=lambda entry: entry["device"])
+    return mounts
 
 
 def collect_initiator_metrics(node: str) -> Tuple[Dict[str, int], List[str]]:
@@ -20,12 +51,14 @@ def collect_initiator_metrics(node: str) -> Tuple[Dict[str, int], List[str]]:
     mounted = sum(1 for line in lines if line.strip().startswith("/"))
     unmounted = total - mounted
 
-    sessions_output, sessions_error = run_pdsh_lines(
+    session_lines, sessions_error = run_pdsh_lines(
         f'pdsh -w {node} "sudo iscsiadm -m session 2>/dev/null || true"'
     )
-    sessions = (
-        0 if sessions_error else len([line for line in sessions_output if line.strip()])
-    )
+    if sessions_error:
+        errors.append(f"{node}: unable to collect sessions: {sessions_error}")
+        session_lines = []
+
+    sessions = len([line for line in session_lines if line.strip()])
 
     session_details_output, session_details_error = run_pdsh_text(
         f'pdsh -w {node} "sudo iscsiadm -m session -P 3 2>/dev/null || true"'
@@ -44,8 +77,20 @@ def collect_initiator_metrics(node: str) -> Tuple[Dict[str, int], List[str]]:
         "mounted": mounted,
         "unmounted": unmounted,
         "sessions": sessions,
+        "session_lines": [line for line in session_lines if line.strip()],
         "session_details": session_details,
     }, errors
+
+
+def collect_initiator_mount_entries(node: str) -> Tuple[List[dict], List[str]]:
+    errors: List[str] = []
+    output, error = run_pdsh_text(
+        f'pdsh -w {node} "lsblk -o NAME,MOUNTPOINT,TRAN --noheadings 2>/dev/null | grep iscsi || true"'
+    )
+    if error:
+        errors.append(f"{node}: unable to collect mount status: {error}")
+        return [], errors
+    return _parse_lsblk_iscsi_lines(output), errors
 
 
 def build_initiator_node_summary(node: str) -> dict:
@@ -59,7 +104,22 @@ def build_initiator_node_summary(node: str) -> dict:
         "total": stats.get("total", 0),
         "mounted": stats.get("mounted", 0),
         "unmounted": stats.get("unmounted", 0),
+        "session_lines": stats.get("session_lines", []),
         "session_details": stats.get("session_details", []),
         "diagnostics": [diagnostic.__dict__ for diagnostic in diagnostics],
         "errors": errors,
+    }
+
+
+def build_initiator_mount_status(node: str) -> dict:
+    mounts, mount_errors = collect_initiator_mount_entries(node)
+    mounted = sum(1 for entry in mounts if entry["status"] == "mounted")
+    unmounted = sum(1 for entry in mounts if entry["status"] == "unmounted")
+    return {
+        "node": node,
+        "role": "initiator",
+        "mounted": mounted,
+        "unmounted": unmounted,
+        "mounts": mounts,
+        "errors": mount_errors,
     }
