@@ -7,12 +7,6 @@ from .common import run_pdsh_lines, run_pdsh_text
 from .error_reporting import collect_node_diagnostics
 
 
-def _image_name_from_mount_entry(device_name: str, mount_point: str) -> str:
-    if mount_point.startswith("/"):
-        return os.path.basename(mount_point.rstrip("/")) or device_name
-    return device_name
-
-
 def _parse_lsblk_iscsi_lines(output: str) -> List[dict]:
     mounts: List[dict] = []
     for line in output.splitlines():
@@ -23,16 +17,25 @@ def _parse_lsblk_iscsi_lines(output: str) -> List[dict]:
         if len(parts) < 2 or parts[-1] != "iscsi":
             continue
         device_name = parts[0]
-        mount_point = " ".join(parts[1:-1]) if len(parts) > 2 else ""
+        middle = parts[1:-1]
+        mount_point = ""
+        for part in middle:
+            if part.startswith("/"):
+                mount_point = part
+            break
+        if mount_point.startswith("/"):
+            image_name = os.path.basename(mount_point.rstrip("/"))
+        else:
+            last_char = device_name[-1]
+            lun_number = ord(last_char) - ord('a')
+            image_name = f"lun{lun_number}"
         status = "mounted" if mount_point.startswith("/") else "unmounted"
-        mounts.append(
-            {
-                "device": f"/dev/{device_name}",
-                "image_name": _image_name_from_mount_entry(device_name, mount_point),
-                "mount_point": mount_point,
-                "status": status,
-            }
-        )
+        mounts.append({
+            "device": f"/dev/{device_name}",
+            "image_name": image_name,
+            "mount_point": mount_point,
+            "status": status,
+        })
     mounts.sort(key=lambda entry: entry["device"])
     return mounts
 
@@ -85,7 +88,7 @@ def collect_initiator_metrics(node: str) -> Tuple[Dict[str, int], List[str]]:
 def collect_initiator_mount_entries(node: str) -> Tuple[List[dict], List[str]]:
     errors: List[str] = []
     output, error = run_pdsh_text(
-        f'pdsh -w {node} "lsblk -o NAME,MOUNTPOINT,TRAN --noheadings 2>/dev/null | grep iscsi || true"'
+        f'pdsh -w {node} "lsblk -o NAME,LABEL,MOUNTPOINT,TRAN --noheadings 2>/dev/null | grep iscsi || true"'
     )
     if error:
         errors.append(f"{node}: unable to collect mount status: {error}")
