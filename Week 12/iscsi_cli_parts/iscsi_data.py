@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Sequence, Tuple
+from pathlib import Path
 
 from .common import (
     DEFAULT_INITIATOR_SELECTOR,
@@ -174,7 +175,10 @@ def _filter_images(images: List[LunImage], image_type: str) -> List[LunImage]:
 
 def _snapshot_deleted_rows(delta: dict) -> List[dict]:
     deleted_rows: List[dict] = []
-    for image_type, items in (("rootfs", delta.get("rootfs_deleted", set())), ("pe", delta.get("pe_deleted", set()))):
+    for image_type, items in (
+        ("rootfs", delta.get("rootfs_deleted", set())),
+        ("pe", delta.get("pe_deleted", set())),
+    ):
         for image_name, image_path in sorted(items):
             deleted_rows.append(
                 {
@@ -584,8 +588,7 @@ def _format_mount_status_table(mounts: List[dict]) -> str:
     for row in rows:
         lines.append(
             "".join(
-                str(row[index]).ljust(widths[index] + 2)
-                for index in range(len(row))
+                str(row[index]).ljust(widths[index] + 2) for index in range(len(row))
             ).rstrip()
         )
     return "\n".join(lines)
@@ -697,7 +700,14 @@ def format_report(report: dict) -> str:
     deleted_rows: List[List[str]] = []
     for node, rows in report.get("deleted_by_node", {}).items():
         for row in rows:
-            deleted_rows.append([node, row.get("type", "unknown"), row.get("image_name", "-"), row.get("path", "-")])
+            deleted_rows.append(
+                [
+                    node,
+                    row.get("type", "unknown"),
+                    row.get("image_name", "-"),
+                    row.get("path", "-"),
+                ]
+            )
 
     lines.append("Deleted images since backup comparison")
     if deleted_rows:
@@ -806,7 +816,9 @@ def cmd_get_luns(args) -> None:
         if args.image_type != "all":
             for summary in summaries:
                 summary["images"] = [
-                    image for image in summary.get("images", []) if image.get("image_type") == args.image_type
+                    image
+                    for image in summary.get("images", [])
+                    if image.get("image_type") == args.image_type
                 ]
         payload = {"nodes": summaries}
     emit_output(payload, args.json, formatter=format_luns_output)
@@ -824,7 +836,9 @@ def cmd_get_tpgts(args) -> None:
         nodes, error = get_target_nodes(DEFAULT_TARGET_SELECTOR)
         if error:
             raise SystemExit(error)
-        payload = {"nodes": _collect_summaries_concurrently(nodes, CONFIGFS_TARGET_PATH)}
+        payload = {
+            "nodes": _collect_summaries_concurrently(nodes, CONFIGFS_TARGET_PATH)
+        }
     emit_output(payload, args.json, formatter=format_tpgts_output)
 
 
@@ -840,7 +854,11 @@ def cmd_get_images(args) -> None:
         else:
             allowed_ids = {image.lun_id for image in images}
             for tpgt in tpgts:
-                filtered_luns = [lun for lun in tpgt.get("luns", []) if lun.get("lun_id") in allowed_ids]
+                filtered_luns = [
+                    lun
+                    for lun in tpgt.get("luns", [])
+                    if lun.get("lun_id") in allowed_ids
+                ]
                 if filtered_luns:
                     filtered_tpgt = dict(tpgt)
                     filtered_tpgt["luns"] = filtered_luns
@@ -864,7 +882,9 @@ def cmd_get_images(args) -> None:
         if args.image_type != "all":
             for summary in summaries:
                 summary["images"] = [
-                    image for image in summary.get("images", []) if image.get("image_type") == args.image_type
+                    image
+                    for image in summary.get("images", [])
+                    if image.get("image_type") == args.image_type
                 ]
         payload = {"nodes": summaries}
     emit_output(payload, args.json, formatter=format_images_output)
@@ -926,7 +946,9 @@ def cmd_get_metrics(args) -> None:
                         "acls_added": len(delta["acls_added"]),
                         "acls_removed": len(delta["acls_removed"]),
                         "storage_objects_added": len(delta["storage_objects_added"]),
-                        "storage_objects_removed": len(delta["storage_objects_removed"]),
+                        "storage_objects_removed": len(
+                            delta["storage_objects_removed"]
+                        ),
                         "rootfs_deleted": len(delta["rootfs_deleted"]),
                         "pe_deleted": len(delta["pe_deleted"]),
                     }
@@ -944,7 +966,9 @@ def cmd_get_metrics(args) -> None:
         if error:
             raise SystemExit(error)
 
-        for summary in _collect_summaries_concurrently(target_nodes, CONFIGFS_TARGET_PATH):
+        for summary in _collect_summaries_concurrently(
+            target_nodes, CONFIGFS_TARGET_PATH
+        ):
             if summary["errors"]:
                 errors[summary["node"]] = "; ".join(summary["errors"])
             node_results.append(summary)
@@ -985,7 +1009,9 @@ def cmd_get_metrics(args) -> None:
                         "acls_added": len(delta["acls_added"]),
                         "acls_removed": len(delta["acls_removed"]),
                         "storage_objects_added": len(delta["storage_objects_added"]),
-                        "storage_objects_removed": len(delta["storage_objects_removed"]),
+                        "storage_objects_removed": len(
+                            delta["storage_objects_removed"]
+                        ),
                         "rootfs_deleted": len(delta["rootfs_deleted"]),
                         "pe_deleted": len(delta["pe_deleted"]),
                     }
@@ -1009,7 +1035,9 @@ def cmd_get_metrics(args) -> None:
 
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "nodes": [item["node"] for item in node_results if item.get("role") == "target"],
+        "nodes": [
+            item["node"] for item in node_results if item.get("role") == "target"
+        ],
         "metrics_rows": metrics_rows,
         "deleted_by_node": deleted_by_node,
         "comparison_summary": comparison_summary,

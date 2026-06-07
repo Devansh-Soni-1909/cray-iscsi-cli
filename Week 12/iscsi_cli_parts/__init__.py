@@ -1,7 +1,5 @@
 from .common import (
-    DEFAULT_BASE_PATH,
     DEFAULT_INITIATOR_SELECTOR,
-    DEFAULT_STATE_FILE,
     DEFAULT_TARGET_SELECTOR,
 )
 from .iscsi_data import (
