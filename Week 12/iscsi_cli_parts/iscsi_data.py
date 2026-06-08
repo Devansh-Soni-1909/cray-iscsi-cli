@@ -705,7 +705,7 @@ def format_report(report: dict) -> str:
                 ]
             )
 
-    lines.append("Deleted images since backup comparison")
+    lines.append("Removed images since backup comparison")
     if deleted_rows:
         lines.append(render_table(["Node", "Type", "Image", "Path"], deleted_rows))
         sources = report.get("comparison_sources", {})
@@ -770,8 +770,15 @@ def format_report(report: dict) -> str:
     return "\n".join(lines)
 
 
-def cmd_get_nodes(args) -> None:
-    label = args.label or args.default_target_label
+def cmd_describe_node(args) -> None:
+    if args.name:
+        summary, error = summarize_requested_node(args.name, args.base_path)
+        if error:
+            raise SystemExit(error)
+        emit_output(summary, args.json, formatter=format_target_summary)
+        return
+
+    label = args.label or DEFAULT_TARGET_SELECTOR
     nodes, error = get_target_nodes(label)
     if error:
         raise SystemExit(error)
@@ -780,13 +787,6 @@ def cmd_get_nodes(args) -> None:
         args.json,
         formatter=format_nodes_output,
     )
-
-
-def cmd_get_node(args) -> None:
-    summary, error = summarize_requested_node(args.name, CONFIGFS_TARGET_PATH)
-    if error:
-        raise SystemExit(error)
-    emit_output(summary, args.json, formatter=format_target_summary)
 
 
 def cmd_get_luns(args) -> None:
