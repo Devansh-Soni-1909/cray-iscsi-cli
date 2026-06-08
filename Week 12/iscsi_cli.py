@@ -74,6 +74,12 @@ def build_parser() -> argparse.ArgumentParser:
     sessions_parser.add_argument("--json", action="store_true", help="Print JSON output")
     sessions_parser.set_defaults(func=cmd_get_sessions)
 
+    mount_status_parser = get_subparsers.add_parser("mount-status", help="Show initiator mount status")
+    mount_status_parser.add_argument("--name", default=None, help="Initiator node to inspect")
+    mount_status_parser.add_argument("--label", default=DEFAULT_INITIATOR_SELECTOR, help="Kubernetes label selector for initiator nodes")
+    mount_status_parser.add_argument("--json", action="store_true", help="Print JSON output")
+    mount_status_parser.set_defaults(func=cmd_get_mount_status)
+
     errors_parser = get_subparsers.add_parser("errors", help="Scan recent logs for storage and network errors")
     errors_parser.add_argument("--name", default=None, help="Node to inspect")
     errors_parser.add_argument("--label", default=DEFAULT_TARGET_SELECTOR, help="Kubernetes label selector for target nodes")

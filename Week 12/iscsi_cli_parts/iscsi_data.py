@@ -611,16 +611,12 @@ def _format_initiator_mount_status_summary(summary: dict) -> str:
 def format_mount_status_output(payload: dict) -> str:
     if "nodes" in payload:
         nodes = payload["nodes"]
-        mounted_nodes = sum(
-            1
-            for summary in nodes
-            if summary.get("mounted", 0) > 0 and summary.get("unmounted", 0) == 0
-        )
-        unmounted_nodes = sum(1 for summary in nodes if summary.get("unmounted", 0) > 0)
+        total_mounted = sum(summary.get("mounted", 0) for summary in nodes)
+        total_unmounted = sum(summary.get("unmounted", 0) for summary in nodes)
         lines = [
-            f"Mounted nodes: {mounted_nodes}, Unmounted nodes: {unmounted_nodes}",
-            "",
-        ]
+    f"Mounted: {total_mounted}, Unmounted: {total_unmounted}",
+    "",
+]
         for summary in nodes:
             lines.append(_format_initiator_mount_status_summary(summary))
             lines.append("")
@@ -1047,9 +1043,12 @@ def cmd_get_metrics(args) -> None:
     }
     emit_output(report, args.json, formatter=format_report)
 
-
 def cmd_get_sessions(args) -> None:
     if args.name:
+        labels, label_error = get_node_labels(args.name)
+        role = detect_node_role(labels) if labels else "unknown"
+        if role != "initiator":
+            raise SystemExit(f"{args.name}: role is '{role}', this command is only valid for initiator nodes")
         payload = build_initiator_node_summary(args.name)
     else:
         nodes, error = get_target_nodes(args.label)
@@ -1058,9 +1057,12 @@ def cmd_get_sessions(args) -> None:
         payload = {"nodes": _collect_initiator_summaries_concurrently(nodes)}
     emit_output(payload, args.json, formatter=format_sessions_output)
 
-
 def cmd_get_mount_status(args) -> None:
     if args.name:
+        labels, label_error = get_node_labels(args.name)
+        role = detect_node_role(labels) if labels else "unknown"
+        if role != "initiator":
+            raise SystemExit(f"{args.name}: role is '{role}', this command is only valid for initiator nodes")
         payload = build_initiator_mount_status(args.name)
     else:
         nodes, error = get_target_nodes(args.label)
