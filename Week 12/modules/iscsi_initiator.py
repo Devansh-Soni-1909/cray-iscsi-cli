@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import os
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from .common import run_pdsh_lines, run_pdsh_text
-from .error_reporting import collect_node_diagnostics
+from .utils import run_pdsh_lines, run_pdsh_text
+from .error_collector import collect_node_diagnostics
 
 
 def _parse_lsblk_iscsi_lines(output: str) -> List[dict]:
@@ -128,3 +129,33 @@ def build_initiator_mount_status(node: str) -> dict:
         "mounts": mounts,
         "errors": mount_errors,
     }
+
+
+def collect_initiator_summaries_concurrently(nodes: Sequence[str]) -> List[dict]:
+    if not nodes:
+        return []
+    results: List[dict] = []
+    with ThreadPoolExecutor(max_workers=min(32, len(nodes))) as executor:
+        futures = {
+            executor.submit(build_initiator_node_summary, node): node for node in nodes
+        }
+        for future in as_completed(futures):
+            results.append(future.result())
+    order = {node: index for index, node in enumerate(nodes)}
+    results.sort(key=lambda item: order.get(item.get("node", ""), 0))
+    return results
+
+
+def collect_initiator_mount_status_concurrently(nodes: Sequence[str]) -> List[dict]:
+    if not nodes:
+        return []
+    results: List[dict] = []
+    with ThreadPoolExecutor(max_workers=min(32, len(nodes))) as executor:
+        futures = {
+            executor.submit(build_initiator_mount_status, node): node for node in nodes
+        }
+        for future in as_completed(futures):
+            results.append(future.result())
+    order = {node: index for index, node in enumerate(nodes)}
+    results.sort(key=lambda item: order.get(item.get("node", ""), 0))
+    return results

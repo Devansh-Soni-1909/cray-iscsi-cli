@@ -1,8 +1,8 @@
-from .common import (
+from .kubernetes import (
     DEFAULT_INITIATOR_SELECTOR,
     DEFAULT_TARGET_SELECTOR,
 )
-from .iscsi_data import (
+from .commands import (
     cmd_get_images,
     cmd_get_luns,
     cmd_get_metrics,
@@ -11,5 +11,5 @@ from .iscsi_data import (
     cmd_get_nodes,
     cmd_get_sessions,
     cmd_get_tpgts,
+    cmd_get_errors,
 )
-from .error_reporting import cmd_get_errors

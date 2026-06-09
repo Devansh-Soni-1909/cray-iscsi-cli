@@ -1,188 +1,32 @@
 from __future__ import annotations
 
-import json
-import os
 import re
-import subprocess
+import json
 import shlex
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence, Tuple
 
-DEFAULT_TARGET_SELECTOR = "iscsi-target=true"
-DEFAULT_INITIATOR_SELECTOR = "iscsi-role=initiator"
+from datetime import datetime, timezone
+from typing import Dict, Tuple, Optional, List, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+from dataclasses import asdict
+
+from .schemas import LunImage, TpgtInfo
+from .utils import run_pdsh_text, run_pdsh_lines, parse_metric_value
+from .error_collector import collect_node_diagnostics
+from .kubernetes import (
+    get_node_labels,
+    detect_node_role,
+    DEFAULT_INITIATOR_SELECTOR,
+    DEFAULT_TARGET_SELECTOR,
+)
+from .iscsi_initiator import build_initiator_node_summary
+
 SAVECONFIG_PATHS = [
     "/etc/rtslib-fb-target/saveconfig.json",
     "/etc/target/saveconfig.json",
 ]
 BACKUP_PATHS = ["/etc/rtslib-fb-target/backup", "/etc/target/backup"]
 TARGET_METRICS_BASE_PATH = "/sys/kernel/config/target/iscsi"
-
-
-@dataclass
-class LunImage:
-    node: str
-    iqn: str
-    tpgt_name: str
-    lun_id: str
-    lun_name: str
-    image_name: str
-    image_type: str
-    udev_path: str
-    object_path: str
-    read_mbytes: int
-    read_iops: int
-
-
-@dataclass
-class NodeErrorReport:
-    node: str
-    source: str
-    severity: str
-    message: str
-
-
-@dataclass
-class TpgtInfo:
-    tag: int
-    tpgt_name: str
-
-
-def run_command(command: str) -> subprocess.CompletedProcess:
-    return subprocess.run(command, shell=True, capture_output=True, text=True)
-
-
-def _clean_pdsh_output(output: str) -> List[str]:
-    lines: List[str] = []
-    for raw_line in output.splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        if ": " in line:
-            line = line.split(": ", 1)[1].strip()
-        if line:
-            lines.append(line)
-    return lines
-
-
-def run_pdsh_lines(command: str) -> Tuple[List[str], Optional[str]]:
-    result = run_command(command)
-    if result.returncode != 0:
-        message = (
-            result.stderr.strip()
-            or result.stdout.strip()
-            or f"exit {result.returncode}"
-        )
-        return [], message
-    return _clean_pdsh_output(result.stdout), None
-
-
-def run_pdsh_text(command: str) -> Tuple[str, Optional[str]]:
-    lines, error = run_pdsh_lines(command)
-    if error:
-        return "", error
-    return "\n".join(lines).strip(), None
-
-
-def _parse_pdsh_output_by_node(
-    output: str, expected_nodes: Optional[Sequence[str]] = None
-) -> Dict[str, List[str]]:
-    grouped: Dict[str, List[str]] = {}
-    expected = set(expected_nodes) if expected_nodes else None
-    for raw_line in output.splitlines():
-        line = raw_line.rstrip()
-        if not line or ": " not in line:
-            continue
-        node, text = line.split(": ", 1)
-        node = node.strip()
-        if expected is not None and node not in expected:
-            continue
-        grouped.setdefault(node, []).append(text.strip())
-    return grouped
-
-
-def run_pdsh_text_by_node(
-    nodes: Sequence[str], remote_command: str
-) -> Tuple[Dict[str, str], Optional[str]]:
-    normalized = [node.strip() for node in nodes if node and node.strip()]
-    if not normalized:
-        return {}, None
-
-    node_expr = ",".join(sorted(set(normalized)))
-    result = run_command(f'pdsh -w {node_expr} "{remote_command}"')
-    grouped = _parse_pdsh_output_by_node(result.stdout, normalized)
-    payload = {
-        node: "\n".join(lines).strip()
-        for node, lines in grouped.items()
-        if "\n".join(lines).strip()
-    }
-
-    if result.returncode != 0 and not payload:
-        message = (
-            result.stderr.strip()
-            or result.stdout.strip()
-            or f"exit {result.returncode}"
-        )
-        return {}, message
-
-    return payload, None
-
-
-def run_kubectl_json(command: str) -> Tuple[dict, Optional[str]]:
-    result = run_command(command)
-    if result.returncode != 0:
-        message = (
-            result.stderr.strip()
-            or result.stdout.strip()
-            or f"exit {result.returncode}"
-        )
-        return {}, message
-    try:
-        return json.loads(result.stdout), None
-    except json.JSONDecodeError as exc:
-        return {}, f"invalid JSON output: {exc}"
-
-
-def get_kubernetes_nodes(node_selector: str) -> Tuple[List[str], Optional[str]]:
-    command = (
-        "kubectl get nodes "
-        f"-l {node_selector} "
-        "-o jsonpath='{.items[*].metadata.name}'"
-    )
-    result = run_command(command)
-    if result.returncode != 0:
-        message = (
-            result.stderr.strip()
-            or result.stdout.strip()
-            or f"exit {result.returncode}"
-        )
-        return [], message
-    output = result.stdout.replace("'", "").strip()
-    return [node for node in output.split() if node], None
-
-
-def get_node_json(node_name: str) -> Tuple[dict, Optional[str]]:
-    return run_kubectl_json(f"kubectl get node {node_name} -o json")
-
-
-def get_node_labels(node_name: str) -> Tuple[Dict[str, str], Optional[str]]:
-    payload, error = get_node_json(node_name)
-    if error:
-        return {}, error
-    labels = payload.get("metadata", {}).get("labels", {})
-    if not isinstance(labels, dict):
-        return {}, f"{node_name}: labels were not a mapping"
-    return labels, None
-
-
-def detect_node_role(labels: Dict[str, str]) -> str:
-    target_value = str(labels.get("iscsi-target", "")).lower()
-    role_value = str(labels.get("iscsi-role", "")).lower()
-    initiator_value = str(labels.get("iscsi-initiator", "")).lower()
-    if target_value in {"true", "yes", "1", "enabled"}:
-        return "target"
-    if role_value == "initiator" or initiator_value in {"true", "yes", "1", "enabled"}:
-        return "initiator"
-    return "unknown"
 
 
 _saveconfig_cache: Dict[str, Tuple[Optional[dict], Optional[str]]] = {}
@@ -214,21 +58,6 @@ def get_saveconfig(node: str) -> Tuple[Optional[dict], Optional[str]]:
     err_msg = f"{node}: unable to load saveconfig.json: {last_error}"
     _saveconfig_cache[node] = (None, err_msg)
     return None, err_msg
-
-
-def _parse_path(path: str) -> Tuple[Optional[str], Optional[int]]:
-    parts = path.rstrip("/").split("/")
-    iqn = None
-    tpgt_tag = None
-    for part in parts:
-        if part.startswith("iqn."):
-            iqn = part
-        elif part.startswith("tpgt_"):
-            try:
-                tpgt_tag = int(part.split("_")[1])
-            except (ValueError, IndexError):
-                pass
-    return iqn, tpgt_tag
 
 
 def list_config_versions(node: str) -> Tuple[List[str], str | None]:
@@ -388,18 +217,6 @@ def list_images(node: str, iqn: str, tpgt_tag: int) -> Tuple[List[LunImage], Lis
     return images, []
 
 
-def parse_metric_value(raw_output: str) -> int:
-    if not raw_output:
-        return 0
-    match = re.search(r"(-?\d+)\s*$", raw_output)
-    if not match:
-        return 0
-    try:
-        return int(match.group(1))
-    except ValueError:
-        return 0
-
-
 def read_lun_stats(
     node: str, iqn: str, tpgt_tag: str, lun_index: str
 ) -> Tuple[Dict[str, int], List[str]]:
@@ -552,22 +369,271 @@ def sum_metric(images: List[LunImage], field_name: str) -> int:
     return sum(getattr(image, field_name, 0) for image in images)
 
 
-def render_table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> str:
-    widths = [len(header) for header in headers]
-    for row in rows:
-        for index, value in enumerate(row):
-            widths[index] = max(widths[index], len(str(value)))
+def collect_target_images(
+    node: str, with_metrics: bool = False
+) -> Tuple[List[LunImage], List[dict], List[str]]:
+    errors: List[str] = []
+    all_tpgts: List[dict] = []
+    images: List[LunImage] = []
 
-    def render_row(values: Sequence[str]) -> str:
-        return " | ".join(
-            str(value).ljust(widths[index]) for index, value in enumerate(values)
+    iqns, iqn_errors = list_iqns(node)
+    errors.extend(iqn_errors)
+
+    def _collect_tpgt(
+        iqn: str, tpgt_tag: int
+    ) -> Tuple[dict, List[LunImage], List[str]]:
+        tpgt_errors: List[str] = []
+        tpgt_images: List[LunImage] = []
+
+        luns, lun_errors = list_luns(node, iqn, tpgt_tag)
+        acls, acl_errors = list_acls(node, iqn, tpgt_tag)
+
+        tpgt_errors.extend(lun_errors)
+        tpgt_errors.extend(acl_errors)
+
+        lun_results: List[LunImage] = []
+        if luns:
+            lun_results, image_errors = list_images(node, iqn, tpgt_tag)
+            tpgt_errors.extend(image_errors)
+            if with_metrics:
+
+                def fetch_lun_stats(lun: LunImage) -> Tuple[LunImage, dict, List[str]]:
+                    data, error = read_lun_stats(
+                        node,
+                        iqn,
+                        tpgt_tag,
+                        lun.lun_id,
+                    )
+                    return lun, data, error
+
+                with ThreadPoolExecutor(max_workers=10) as executor:
+                    futures = [
+                        executor.submit(fetch_lun_stats, lun) for lun in lun_results
+                    ]
+                    for future in as_completed(futures):
+                        try:
+                            lun, data, error = future.result()
+                        except Exception as exc:
+                            tpgt_errors.append(str(exc))
+                            continue
+                        if error:
+                            tpgt_errors.extend(error)
+                        if data:
+                            lun.read_mbytes = data.get("read_mbytes")
+                            lun.read_iops = data.get("read_iops")
+
+        lun_results.sort(key=lambda item: (int(item.lun_id), item.lun_name))
+        tpgt_images.extend(lun_results)
+        tpgt_entry = {
+            "node": node,
+            "iqn": iqn,
+            "tpgt_name": f"tpgt_{tpgt_tag}",
+            "luns": [asdict(image) for image in lun_results],
+            "acl_names": acls,
+            "acl_count": len(acls),
+            "lun_count": len(lun_results),
+        }
+        return tpgt_entry, tpgt_images, tpgt_errors
+
+    for iqn in iqns:
+        tpgt_info_list, tpgt_errors = list_tpgts(node, iqn)
+        errors.extend(tpgt_errors)
+
+        if not tpgt_info_list:
+            continue
+
+        tpgt_results: List[Tuple[dict, List[LunImage], List[str]]] = []
+        for tpgt_info in tpgt_info_list:
+            tpgt_results.append(_collect_tpgt(iqn, tpgt_info.tag))
+
+        for tpgt_entry, tpgt_images, tpgt_errors_local in sorted(
+            tpgt_results, key=lambda item: item[0]["tpgt_name"]
+        ):
+            all_tpgts.append(tpgt_entry)
+            images.extend(tpgt_images)
+            errors.extend(tpgt_errors_local)
+
+    return images, all_tpgts, errors
+
+
+def collect_target_tpgts(
+    node: str, with_metrics: bool = False
+) -> Tuple[List[dict], List[str]]:
+    _, tpgts, errors = collect_target_images(node, with_metrics)
+    return tpgts, errors
+
+
+def filter_images(images: List[LunImage], image_type: str) -> List[LunImage]:
+    if image_type == "all":
+        return images
+    return [image for image in images if image.image_type == image_type]
+
+
+def snapshot_deleted_rows(delta: dict) -> List[dict]:
+    deleted_rows: List[dict] = []
+    for image_type, items in (
+        ("rootfs", delta.get("rootfs_deleted", set())),
+        ("pe", delta.get("pe_deleted", set())),
+    ):
+        for image_name, image_path in sorted(items):
+            deleted_rows.append(
+                {
+                    "type": image_type,
+                    "image_name": image_name or "-",
+                    "path": image_path or "-",
+                }
+            )
+    return deleted_rows
+
+
+def load_backup_snapshot(
+    node: str, compare_config: Optional[str]
+) -> Tuple[Optional[dict], Optional[str], Optional[str]]:
+    if compare_config:
+        candidate_paths = [compare_config]
+        if not compare_config.startswith("/"):
+            candidate_paths = [f"{base}/{compare_config}" for base in BACKUP_PATHS]
+
+        last_error = None
+        for candidate_path in candidate_paths:
+            backup_config, error = read_backup_config_file(node, candidate_path)
+            if backup_config is not None:
+                return backup_config, None, candidate_path
+            last_error = error
+        return None, last_error, compare_config
+
+    versions, error = list_config_versions(node)
+    if error:
+        return None, error, None
+    if not versions:
+        return None, None, None
+
+    backup_path = versions[0]
+    backup_config, backup_error = read_backup_config_file(node, backup_path)
+    return backup_config, backup_error, backup_path
+
+
+def build_target_node_summary(node: str, with_metrics: bool = False) -> dict:
+    images, tpgts, errors = collect_target_images(node, with_metrics)
+    by_type = count_by_type(images)
+    diagnostics, diagnostic_errors = collect_node_diagnostics(node)
+    errors.extend(diagnostic_errors)
+    return {
+        "node": node,
+        "role": "target",
+        "iqns": sorted({image.iqn for image in images}),
+        "tpgts": tpgts,
+        "tpgt_count": len(tpgts),
+        "lun_count": len(images),
+        "total_active_images": len(images),
+        "rootfs_count": by_type.get("rootfs", 0),
+        "pe_count": by_type.get("pe", 0),
+        "unknown_count": by_type.get("unknown", 0),
+        "read_mbytes": sum_metric(images, "read_mbytes"),
+        "read_iops": sum_metric(images, "read_iops"),
+        "images": [asdict(image) for image in images],
+        "diagnostics": [asdict(diagnostic) for diagnostic in diagnostics],
+        "errors": errors,
+        "with_metrics": with_metrics,
+    }
+
+
+def collect_summaries_concurrently(
+    nodes: Sequence[str], with_metrics: bool = False
+) -> List[dict]:
+    if not nodes:
+        return []
+    results: List[dict] = []
+    with ThreadPoolExecutor(max_workers=min(32, len(nodes))) as executor:
+        futures = {
+            executor.submit(build_target_node_summary, node, with_metrics): node
+            for node in nodes
+        }
+        for future in as_completed(futures):
+            results.append(future.result())
+    order = {node: index for index, node in enumerate(nodes)}
+    results.sort(key=lambda item: order.get(item.get("node", ""), 0))
+    return results
+
+
+def summarize_requested_node(
+    node_name: str, with_metrics: bool = False
+) -> Tuple[dict, Optional[str]]:
+    labels, label_error = get_node_labels(node_name)
+    role = detect_node_role(labels) if labels else "unknown"
+    if label_error and role == "unknown":
+        return {
+            "node": node_name,
+            "role": "unknown",
+            "errors": [label_error],
+        }, label_error
+    if role == "initiator":
+        return build_initiator_node_summary(node_name), None
+    if role == "target":
+        return build_target_node_summary(node_name, with_metrics), None
+
+    target_summary = build_target_node_summary(node_name, with_metrics)
+    if target_summary["errors"]:
+        return target_summary, None
+    initiator_summary = build_initiator_node_summary(node_name)
+    if initiator_summary["errors"]:
+        return initiator_summary, None
+    target_summary["role"] = "unknown"
+    return target_summary, None
+
+
+def build_report(
+    nodes: List[str],
+    node_results: List[dict],
+    deleted_by_node: Dict[str, List[dict]],
+    state_path: Path,
+    errors: Dict[str, str],
+    initiator_stats: Dict[str, Dict],
+) -> dict:
+    summaries: List[dict] = []
+    deleted_images: List[dict] = []
+    for node_result in node_results:
+        deleted_images_for_node = deleted_by_node.get(node_result["node"], [])
+        summaries.append(
+            {
+                "node": node_result["node"],
+                "iqns": node_result.get("iqns", []),
+                "tpgt_count": node_result.get("tpgt_count", 0),
+                "lun_count": node_result.get("lun_count", 0),
+                "total_active_images": node_result.get("total_active_images", 0),
+                "rootfs_count": node_result.get("rootfs_count", 0),
+                "pe_count": node_result.get("pe_count", 0),
+                "deleted_rootfs": sum(
+                    1
+                    for image in deleted_images_for_node
+                    if image.get("image_type") == "rootfs"
+                ),
+                "deleted_pe": sum(
+                    1
+                    for image in deleted_images_for_node
+                    if image.get("image_type") == "pe"
+                ),
+                "read_mbytes": node_result.get("read_mbytes", 0),
+                "read_iops": node_result.get("read_iops", 0),
+                "images": node_result.get("images", []),
+                "diagnostics": node_result.get("diagnostics", []),
+                "role": node_result.get("role", "unknown"),
+            }
         )
+        for image in deleted_images_for_node:
+            deleted_images.append({"node": node_result["node"], **image})
 
-    separator = "-+-".join("-" * width for width in widths)
-    lines = [render_row(headers), separator]
-    lines.extend(render_row(row) for row in rows)
-    return "\n".join(lines)
-
-
-def emit_output(payload: dict, formatter=None) -> None:
-    print(formatter(payload) if formatter else str(payload))
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "nodes": nodes,
+        "nodes_summary": summaries,
+        "deleted_images": deleted_images,
+        "errors": errors,
+        "initiator_stats": initiator_stats,
+        "state_file": str(state_path),
+        "defaults": {
+            "node_selector": DEFAULT_TARGET_SELECTOR,
+            "initiator_selector": DEFAULT_INITIATOR_SELECTOR,
+            "configfs_path": TARGET_METRICS_BASE_PATH,
+        },
+    }
