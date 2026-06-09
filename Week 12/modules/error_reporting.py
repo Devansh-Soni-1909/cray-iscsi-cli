@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple
 from .common import (
     NodeErrorReport,
     emit_output,
-    get_target_nodes, 
+    get_kubernetes_nodes,
     render_table,
     run_pdsh_text_by_node,
     run_pdsh_text,
@@ -48,6 +48,7 @@ def collect_recent_logs(node: str, lines: int = 200) -> Tuple[str, Optional[str]
             continue
     return "", f"{node}: unable to collect logs"
 
+
 def collect_service_errors(
     node: str,
     days: int = 2,
@@ -63,27 +64,24 @@ def collect_service_errors(
 
     for service in services:
         command = (
-            f'journalctl -u {service} '
+            f"journalctl -u {service} "
             f'--since "{days} days ago" '
-            f'-p err '
-            f'-n {lines} '
-            '--no-pager'
+            f"-p err "
+            f"-n {lines} "
+            "--no-pager"
         )
 
-        output, error = run_pdsh_text(
-            f'pdsh -w {node} "{command}"'
-        )
+        output, error = run_pdsh_text(f'pdsh -w {node} "{command}"')
 
         if error:
-            errors.append(
-                f"{node}: unable to collect errors for {service}: {error}"
-            )
+            errors.append(f"{node}: unable to collect errors for {service}: {error}")
             continue
 
         service_logs[service] = output
 
     return service_logs, errors
-    
+
+
 def collect_recent_logs_for_nodes(
     nodes: List[str], lines: int = 200
 ) -> Tuple[dict, dict]:
@@ -185,9 +183,7 @@ def format_error_summary(payload: dict) -> str:
         else:
             lines.append("None")
 
-        #
         # Recent Service Errors
-        #
         lines.append("")
         lines.append("Recent Service Errors")
 
@@ -210,9 +206,7 @@ def format_error_summary(payload: dict) -> str:
                 else:
                     lines.append("No recent errors found.")
 
-        #
         # Detected Errors
-        #
         diagnostic_rows = []
 
         for item in payload.get("nodes", []):
@@ -241,9 +235,7 @@ def format_error_summary(payload: dict) -> str:
 
         return "\n".join(lines)
 
-    #
     # Single-node mode
-    #
     lines = [
         f"Node: {payload.get('node', '-')}",
         f"Lines: {payload.get('lines', '-')}",
@@ -303,7 +295,7 @@ def cmd_get_errors(args) -> None:
     if args.name:
         payload = _collect_error_summary(args.name, args.lines)
     else:
-        nodes, error = get_target_nodes(args.label)
+        nodes, error = get_kubernetes_nodes(args.label)
         if error:
             raise SystemExit(error)
 

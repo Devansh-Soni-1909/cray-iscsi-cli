@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -10,7 +9,9 @@ from pathlib import Path
 from .common import (
     DEFAULT_INITIATOR_SELECTOR,
     DEFAULT_TARGET_SELECTOR,
+    TARGET_METRICS_BASE_PATH,
     LunImage,
+    TpgtInfo,
     build_snapshot,
     count_by_type,
     compare_snapshots,
@@ -19,18 +20,16 @@ from .common import (
     BACKUP_PATHS,
     get_node_labels,
     get_saveconfig,
-    get_target_nodes,
-    infer_image_type,
+    get_kubernetes_nodes,
     list_config_versions,
-    list_acls,
     list_iqns,
-    list_luns,
+    list_acls,
     list_tpgts,
-    parse_metric_value,
+    list_luns,
+    list_images,
     read_lun_stats,
     read_backup_config_file,
     render_table,
-    resolve_object_path,
     sum_metric,
 )
 from .error_reporting import collect_node_diagnostics
@@ -39,95 +38,66 @@ from .initiator_configuration import (
     build_initiator_node_summary,
 )
 
-CONFIGFS_TARGET_PATH = "/sys/kernel/config/target/iscsi"
-
 
 def collect_target_images(
-    node: str, base_path: str
+    node: str, with_metrics: bool = False
 ) -> Tuple[List[LunImage], List[dict], List[str]]:
     errors: List[str] = []
-    tpgts: List[dict] = []
+    all_tpgts: List[dict] = []
     images: List[LunImage] = []
-    iqns, iqn_errors = list_iqns(node, base_path)
+
+    iqns, iqn_errors = list_iqns(node)
     errors.extend(iqn_errors)
 
-    def _collect_lun_image(
-        iqn: str, tpgt_name: str, lun_path: str, lun_name: str
-    ) -> Tuple[Optional[LunImage], List[str]]:
-        lun_errors: List[str] = []
-        lun_id_match = re.search(r"lun_(\d+)", lun_name)
-        if not lun_id_match:
-            return None, lun_errors
-
-        lun_id = lun_id_match.group(1)
-        object_path, object_error = resolve_object_path(node, lun_path, lun_name)
-        if object_error:
-            lun_errors.append(
-                f"{node}: unable to resolve object for {iqn}/{tpgt_name}/{lun_name}: {object_error}"
-            )
-
-        udev_path = object_path
-
-        stats, stat_errors = read_lun_stats(node, lun_path, lun_name)
-
-        lun_errors.extend(stat_errors)
-        identity_source = udev_path or object_path or f"{iqn}:{tpgt_name}:{lun_name}"
-        image_name = Path(identity_source).name if identity_source else lun_name
-        image_type = infer_image_type(identity_source or image_name)
-
-        image = LunImage(
-            node=node,
-            iqn=iqn,
-            tpgt_name=tpgt_name,
-            lun_id=lun_id,
-            lun_name=lun_name,
-            image_name=image_name,
-            image_type=image_type,
-            udev_path=udev_path or object_path or identity_source,
-            object_path=object_path,
-            read_mbytes=stats["read_mbytes"],
-            read_iops=stats["read_iops"],
-        )
-        return image, lun_errors
-
     def _collect_tpgt(
-        iqn: str, iqn_path: str, tpgt_name: str
+        iqn: str, tpgt_tag: int
     ) -> Tuple[dict, List[LunImage], List[str]]:
         tpgt_errors: List[str] = []
         tpgt_images: List[LunImage] = []
-        tpgt_path = f"{iqn_path}/{tpgt_name}"
-        lun_path = f"{tpgt_path}/lun"
 
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            luns_future = executor.submit(list_luns, node, lun_path)
-            acls_future = executor.submit(list_acls, node, f"{tpgt_path}/acls")
-            luns, lun_errors = luns_future.result()
-            acls, acl_errors = acls_future.result()
+        luns, lun_errors = list_luns(node, iqn, tpgt_tag)
+        acls, acl_errors = list_acls(node, iqn, tpgt_tag)
 
         tpgt_errors.extend(lun_errors)
         tpgt_errors.extend(acl_errors)
 
         lun_results: List[LunImage] = []
         if luns:
-            with ThreadPoolExecutor(max_workers=min(6, len(luns))) as executor:
-                future_map = {
-                    executor.submit(
-                        _collect_lun_image, iqn, tpgt_name, lun_path, lun_name
-                    ): lun_name
-                    for lun_name in luns
-                }
-                for future in as_completed(future_map):
-                    image, lun_image_errors = future.result()
-                    tpgt_errors.extend(lun_image_errors)
-                    if image is not None:
-                        lun_results.append(image)
+            lun_results, image_errors = list_images(node, iqn, tpgt_tag)
+            tpgt_errors.extend(image_errors)
+            if with_metrics:
+
+                def fetch_lun_stats(lun: LunImage) -> Tuple[LunImage, dict, List[str]]:
+                    data, error = read_lun_stats(
+                        node,
+                        iqn,
+                        tpgt_tag,
+                        lun.lun_id,
+                    )
+                    return lun, data, error
+
+                with ThreadPoolExecutor(max_workers=10) as executor:
+                    futures = [
+                        executor.submit(fetch_lun_stats, lun) for lun in lun_results
+                    ]
+                    for future in as_completed(futures):
+                        try:
+                            lun, data, error = future.result()
+                        except Exception as exc:
+                            tpgt_errors.append(str(exc))
+                            continue
+                        if error:
+                            tpgt_errors.extend(error)
+                        if data:
+                            lun.read_mbytes = data.get("read_mbytes")
+                            lun.read_iops = data.get("read_iops")
 
         lun_results.sort(key=lambda item: (int(item.lun_id), item.lun_name))
         tpgt_images.extend(lun_results)
         tpgt_entry = {
             "node": node,
             "iqn": iqn,
-            "tpgt_name": tpgt_name,
+            "tpgt_name": f"tpgt_{tpgt_tag}",
             "luns": [asdict(image) for image in lun_results],
             "acl_names": acls,
             "acl_count": len(acls),
@@ -136,34 +106,30 @@ def collect_target_images(
         return tpgt_entry, tpgt_images, tpgt_errors
 
     for iqn in iqns:
-        iqn_path = f"{base_path}/{iqn}"
-        tpgt_names, tpgt_errors = list_tpgts(node, iqn_path)
+        tpgt_info_list, tpgt_errors = list_tpgts(node, iqn)
         errors.extend(tpgt_errors)
 
-        if not tpgt_names:
+        if not tpgt_info_list:
             continue
 
         tpgt_results: List[Tuple[dict, List[LunImage], List[str]]] = []
-        with ThreadPoolExecutor(max_workers=min(16, len(tpgt_names))) as executor:
-            future_map = {
-                executor.submit(_collect_tpgt, iqn, iqn_path, tpgt_name): tpgt_name
-                for tpgt_name in tpgt_names
-            }
-            for future in as_completed(future_map):
-                tpgt_results.append(future.result())
+        for tpgt_info in tpgt_info_list:
+            tpgt_results.append(_collect_tpgt(iqn, tpgt_info.tag))
 
         for tpgt_entry, tpgt_images, tpgt_errors_local in sorted(
             tpgt_results, key=lambda item: item[0]["tpgt_name"]
         ):
-            tpgts.append(tpgt_entry)
+            all_tpgts.append(tpgt_entry)
             images.extend(tpgt_images)
             errors.extend(tpgt_errors_local)
 
-    return images, tpgts, errors
+    return images, all_tpgts, errors
 
 
-def collect_target_tpgts(node: str, base_path: str) -> Tuple[List[dict], List[str]]:
-    _, tpgts, errors = collect_target_images(node, base_path)
+def collect_target_tpgts(
+    node: str, with_metrics: bool = False
+) -> Tuple[List[dict], List[str]]:
+    _, tpgts, errors = collect_target_images(node, with_metrics)
     return tpgts, errors
 
 
@@ -217,8 +183,8 @@ def _load_backup_snapshot(
     return backup_config, backup_error, backup_path
 
 
-def build_target_node_summary(node: str, base_path: str = CONFIGFS_TARGET_PATH) -> dict:
-    images, tpgts, errors = collect_target_images(node, base_path)
+def build_target_node_summary(node: str, with_metrics: bool = False) -> dict:
+    images, tpgts, errors = collect_target_images(node, with_metrics)
     by_type = count_by_type(images)
     diagnostics, diagnostic_errors = collect_node_diagnostics(node)
     errors.extend(diagnostic_errors)
@@ -238,11 +204,12 @@ def build_target_node_summary(node: str, base_path: str = CONFIGFS_TARGET_PATH) 
         "images": [asdict(image) for image in images],
         "diagnostics": [asdict(diagnostic) for diagnostic in diagnostics],
         "errors": errors,
+        "with_metrics": with_metrics,
     }
 
 
 def summarize_requested_node(
-    node_name: str, base_path: str
+    node_name: str, with_metrics: bool = False
 ) -> Tuple[dict, Optional[str]]:
     labels, label_error = get_node_labels(node_name)
     role = detect_node_role(labels) if labels else "unknown"
@@ -255,9 +222,9 @@ def summarize_requested_node(
     if role == "initiator":
         return build_initiator_node_summary(node_name), None
     if role == "target":
-        return build_target_node_summary(node_name, base_path), None
+        return build_target_node_summary(node_name, with_metrics), None
 
-    target_summary = build_target_node_summary(node_name, base_path)
+    target_summary = build_target_node_summary(node_name, with_metrics)
     if target_summary["errors"]:
         return target_summary, None
     initiator_summary = build_initiator_node_summary(node_name)
@@ -319,7 +286,7 @@ def build_report(
         "defaults": {
             "node_selector": DEFAULT_TARGET_SELECTOR,
             "initiator_selector": DEFAULT_INITIATOR_SELECTOR,
-            "configfs_path": CONFIGFS_TARGET_PATH,
+            "configfs_path": TARGET_METRICS_BASE_PATH,
         },
     }
 
@@ -343,6 +310,7 @@ def format_target_summary(summary: dict) -> str:
         f"Role: {summary.get('role', 'unknown')}",
     ]
     if summary.get("role") == "target":
+        with_metrics = summary.get("with_metrics", False)
         lines.append(f"IQNs: {', '.join(summary.get('iqns', [])) or 'None'}")
         lines.append(
             f"TPGTs: {summary.get('tpgt_count', 0)}, LUNs: {summary.get('lun_count', 0)}, Images: {summary.get('total_active_images', 0)}"
@@ -367,9 +335,9 @@ def format_target_summary(summary: dict) -> str:
                         [
                             tpgt["iqn"],
                             tpgt["tpgt_name"],
-                            str(tpgt.get("lun_count", 0)),
-                            str(tpgt.get("acl_count", 0)),
-                            ", ".join(tpgt.get("acl_names", [])) or "None",
+                            str(tpgt["lun_count"]),
+                            str(tpgt["acl_count"]),
+                            ", ".join(tpgt["acl_names"]) or "None",
                         ]
                         for tpgt in tpgts
                     ],
@@ -377,35 +345,25 @@ def format_target_summary(summary: dict) -> str:
             )
         images = summary.get("images", [])
         if images:
+            headers = ["IQN", "TPGT", "LUN", "Type", "Image", "udev_path"]
+            if with_metrics:
+                headers.extend(["Read MBytes", "Read IOPs"])
+            rows = []
+            for image in images:
+                row = [
+                    image["iqn"],
+                    image["tpgt_name"],
+                    image["lun_name"],
+                    image["image_type"],
+                    image["image_name"],
+                    image["udev_path"],
+                ]
+                if with_metrics:
+                    row.extend([str(image["read_mbytes"]), str(image["read_iops"])])
+                rows.append(row)
             lines.append("")
             lines.append("LUNs and images")
-            lines.append(
-                render_table(
-                    [
-                        "IQN",
-                        "TPGT",
-                        "LUN",
-                        "Type",
-                        "Image",
-                        "udev_path",
-                        "Read MBytes",
-                        "Read IOPs",
-                    ],
-                    [
-                        [
-                            image["iqn"],
-                            image["tpgt_name"],
-                            image["lun_name"],
-                            image["image_type"],
-                            image["image_name"],
-                            image["udev_path"],
-                            str(image["read_mbytes"]),
-                            str(image["read_iops"]),
-                        ]
-                        for image in images
-                    ],
-                )
-            )
+            lines.append(render_table(headers, rows))
     elif summary.get("role") == "initiator":
         lines.append(
             f"Sessions: {summary.get('sessions', 0)}, Total mounts: {summary.get('total', 0)}, Mounted: {summary.get('mounted', 0)}, Unmounted: {summary.get('unmounted', 0)}"
@@ -436,33 +394,29 @@ def format_luns_output(payload: dict) -> str:
             lines.append(f"Filter: {image_filter}")
         lines.append(f"LUNs: {payload.get('count', len(luns))}")
         if luns:
-            lines.append(
-                render_table(
-                    [
-                        "IQN",
-                        "TPGT",
-                        "LUN",
-                        "Type",
-                        "Image",
-                        "udev_path",
-                        "Read MBytes",
-                        "Read IOPs",
-                    ],
-                    [
+            with_metrics = payload.get("with_metrics", False)
+            headers = ["IQN", "TPGT", "LUN", "Type", "Image", "udev_path"]
+            if with_metrics:
+                headers.extend(["Read MBytes", "Read IOPs"])
+            rows = []
+            for image in luns:
+                row = [
+                    image["iqn"],
+                    image["tpgt_name"],
+                    image["lun_name"],
+                    image["image_type"],
+                    image["image_name"],
+                    image["udev_path"],
+                ]
+                if with_metrics:
+                    row.extend(
                         [
-                            image["iqn"],
-                            image["tpgt_name"],
-                            image["lun_name"],
-                            image["image_type"],
-                            image["image_name"],
-                            image["udev_path"],
                             str(image["read_mbytes"]),
                             str(image["read_iops"]),
                         ]
-                        for image in luns
-                    ],
-                )
-            )
+                    )
+                rows.append(row)
+            lines.append(render_table(headers, rows))
         else:
             lines.append("None")
     else:
@@ -484,11 +438,11 @@ def format_tpgts_output(payload: dict) -> str:
             for tpgt in tpgts:
                 rows.append(
                     [
-                        tpgt.get("iqn", "-"),
-                        tpgt.get("tpgt_name", "-"),
-                        str(tpgt.get("lun_count", 0)),
-                        str(tpgt.get("acl_count", 0)),
-                        ", ".join(tpgt.get("acl_names", [])) or "None",
+                        tpgt["iqn"],
+                        tpgt["tpgt_name"],
+                        str(tpgt["lun_count"]),
+                        str(tpgt["acl_count"]),
+                        ", ".join(tpgt["acl_names"]) or "None",
                     ]
                 )
             lines.append(
@@ -514,19 +468,26 @@ def format_images_output(payload: dict) -> str:
             lines.append(f"Filter: {image_filter}")
         lines.append(f"Images: {payload.get('count', len(images))}")
         if images:
-            lines.append(
-                render_table(
-                    ["Image Name", "LUN", "Type"],
-                    [
+            with_metrics = payload.get("with_metrics", False)
+            headers = ["Image Name", "LUN", "Type"]
+            if with_metrics:
+                headers.extend(["Read MBytes", "Read IOPs"])
+            rows = []
+            for image in images:
+                row = [
+                    image["image_name"],
+                    image["lun_name"],
+                    image["image_type"],
+                ]
+                if with_metrics:
+                    row.extend(
                         [
-                            image["image_name"],
-                            image["lun_name"],
-                            image["image_type"],
+                            str(image["read_mbytes"]),
+                            str(image["read_iops"]),
                         ]
-                        for image in images
-                    ],
-                )
-            )
+                    )
+                rows.append(row)
+            lines.append(render_table(headers, rows))
         else:
             lines.append("None")
     else:
@@ -614,9 +575,9 @@ def format_mount_status_output(payload: dict) -> str:
         total_mounted = sum(summary.get("mounted", 0) for summary in nodes)
         total_unmounted = sum(summary.get("unmounted", 0) for summary in nodes)
         lines = [
-    f"Mounted: {total_mounted}, Unmounted: {total_unmounted}",
-    "",
-]
+            f"Mounted: {total_mounted}, Unmounted: {total_unmounted}",
+            "",
+        ]
         for summary in nodes:
             lines.append(_format_initiator_mount_status_summary(summary))
             lines.append("")
@@ -624,13 +585,15 @@ def format_mount_status_output(payload: dict) -> str:
     return _format_initiator_mount_status_summary(payload)
 
 
-def _collect_summaries_concurrently(nodes: Sequence[str], base_path: str) -> List[dict]:
+def _collect_summaries_concurrently(
+    nodes: Sequence[str], with_metrics: bool = False
+) -> List[dict]:
     if not nodes:
         return []
     results: List[dict] = []
     with ThreadPoolExecutor(max_workers=min(32, len(nodes))) as executor:
         futures = {
-            executor.submit(build_target_node_summary, node, base_path): node
+            executor.submit(build_target_node_summary, node, with_metrics): node
             for node in nodes
         }
         for future in as_completed(futures):
@@ -769,9 +732,10 @@ def format_report(report: dict) -> str:
 
     return "\n".join(lines)
 
+
 def cmd_get_nodes(args) -> None:
     label = args.label or args.default_target_label
-    nodes, error = get_target_nodes(label)
+    nodes, error = get_kubernetes_nodes(label)
     if error:
         raise SystemExit(error)
     emit_output(
@@ -779,16 +743,18 @@ def cmd_get_nodes(args) -> None:
         formatter=format_nodes_output,
     )
 
+
 def cmd_describe_node(args) -> None:
+    with_metrics = True if args.metrics else False
     if args.name:
-        summary, error = summarize_requested_node(args.name, args.base_path)
+        summary, error = summarize_requested_node(args.name, with_metrics)
         if error:
             raise SystemExit(error)
         emit_output(summary, formatter=format_target_summary)
         return
 
     label = args.label or DEFAULT_TARGET_SELECTOR
-    nodes, error = get_target_nodes(label)
+    nodes, error = get_kubernetes_nodes(label)
     if error:
         raise SystemExit(error)
     emit_output(
@@ -798,12 +764,15 @@ def cmd_describe_node(args) -> None:
 
 
 def cmd_get_luns(args) -> None:
+    with_metrics = True if args.metrics else False
     if args.name:
         labels, label_error = get_node_labels(args.name)
         role = detect_node_role(labels)
         if role != "target":
-            raise SystemExit(f"{args.name}: role is '{role}', this command is only valid for target nodes")
-        images, _, errors = collect_target_images(args.name, CONFIGFS_TARGET_PATH)
+            raise SystemExit(
+                f"{args.name}: role is '{role}', this command is only valid for target nodes"
+            )
+        images, _, errors = collect_target_images(args.name, with_metrics)
         images = _filter_images(images, args.image_type)
         if errors or label_error:
             raise SystemExit("; ".join(errors + ([label_error] if label_error else [])))
@@ -813,12 +782,13 @@ def cmd_get_luns(args) -> None:
             "luns": [asdict(image) for image in images],
             "count": len(images),
             "image_type": args.image_type,
+            "with_metrics": with_metrics,
         }
     else:
-        nodes, error = get_target_nodes(DEFAULT_TARGET_SELECTOR)
+        nodes, error = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
         if error:
             raise SystemExit(error)
-        summaries = _collect_summaries_concurrently(nodes, CONFIGFS_TARGET_PATH)
+        summaries = _collect_summaries_concurrently(nodes, with_metrics)
         if args.image_type != "all":
             for summary in summaries:
                 summary["images"] = [
@@ -826,48 +796,50 @@ def cmd_get_luns(args) -> None:
                     for image in summary.get("images", [])
                     if image.get("image_type") == args.image_type
                 ]
-        payload = {"nodes": summaries}
+        payload = {"nodes": summaries, "with_metrics": with_metrics}
     emit_output(payload, formatter=format_luns_output)
 
 
 def cmd_get_tpgts(args) -> None:
+    with_metrics = False
     if args.name:
         labels, label_error = get_node_labels(args.name)
         role = detect_node_role(labels)
         if role != "target":
-            raise SystemExit(f"{args.name}: role is '{role}', this command is only valid for target nodes")
-        tpgts, errors = collect_target_tpgts(args.name, CONFIGFS_TARGET_PATH)
+            raise SystemExit(
+                f"{args.name}: role is '{role}', this command is only valid for target nodes"
+            )
+        tpgts, errors = collect_target_tpgts(args.name, with_metrics)
         if errors or label_error:
             raise SystemExit("; ".join(errors + ([label_error] if label_error else [])))
         payload = {"node": args.name, "role": role, "tpgts": tpgts, "count": len(tpgts)}
     else:
-        nodes, error = get_target_nodes(DEFAULT_TARGET_SELECTOR)
+        nodes, error = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
         if error:
             raise SystemExit(error)
-        payload = {
-            "nodes": _collect_summaries_concurrently(nodes, CONFIGFS_TARGET_PATH)
-        }
-    emit_output(payload,formatter=format_tpgts_output)
+        payload = {"nodes": _collect_summaries_concurrently(nodes, with_metrics)}
+    emit_output(payload, formatter=format_tpgts_output)
 
 
 def cmd_get_images(args) -> None:
+    with_metrics = True if args.metrics else False
     if args.name:
         labels, label_error = get_node_labels(args.name)
         role = detect_node_role(labels)
         if role != "target":
-            raise SystemExit(f"{args.name}: role is '{role}', this command is only valid for target nodes")
-        images, tpgts, errors = collect_target_images(args.name, CONFIGFS_TARGET_PATH)
+            raise SystemExit(
+                f"{args.name}: role is '{role}', this command is only valid for target nodes"
+            )
+        images, tpgts, errors = collect_target_images(args.name, with_metrics)
         images = _filter_images(images, args.image_type)
         filtered_tpgts = []
         if args.image_type == "all":
-            filtered_tpgts = tpgts  
+            filtered_tpgts = tpgts
         else:
             allowed_ids = {image.lun_id for image in images}
             for tpgt in tpgts:
                 filtered_luns = [
-                    lun
-                    for lun in tpgt.get("luns", [])
-                    if lun.get("lun_id") in allowed_ids
+                    lun for lun in tpgt["luns"] if lun["lun_id"] in allowed_ids
                 ]
                 if filtered_luns:
                     filtered_tpgt = dict(tpgt)
@@ -883,12 +855,13 @@ def cmd_get_images(args) -> None:
             "tpgts": filtered_tpgts,
             "count": len(images),
             "image_type": args.image_type,
+            "with_metrics": with_metrics,
         }
     else:
-        nodes, error = get_target_nodes(DEFAULT_TARGET_SELECTOR)
+        nodes, error = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
         if error:
             raise SystemExit(error)
-        summaries = _collect_summaries_concurrently(nodes, CONFIGFS_TARGET_PATH)
+        summaries = _collect_summaries_concurrently(nodes, with_metrics)
         if args.image_type != "all":
             for summary in summaries:
                 summary["images"] = [
@@ -896,8 +869,8 @@ def cmd_get_images(args) -> None:
                     for image in summary.get("images", [])
                     if image.get("image_type") == args.image_type
                 ]
-        payload = {"nodes": summaries}
-    emit_output(payload,formatter=format_images_output)
+        payload = {"nodes": summaries, "with_metrics": with_metrics}
+    emit_output(payload, formatter=format_images_output)
 
 
 def cmd_get_metrics(args) -> None:
@@ -910,7 +883,7 @@ def cmd_get_metrics(args) -> None:
     initiator_stats: Dict[str, Dict] = {}
 
     if args.name:
-        summary, error = summarize_requested_node(args.name, CONFIGFS_TARGET_PATH)
+        summary, error = summarize_requested_node(args.name, True)
         if error:
             raise SystemExit(error)
 
@@ -972,13 +945,11 @@ def cmd_get_metrics(args) -> None:
                 "sessions": summary.get("sessions", 0),
             }
     else:
-        target_nodes, error = get_target_nodes(DEFAULT_TARGET_SELECTOR)
+        target_nodes, error = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
         if error:
             raise SystemExit(error)
 
-        for summary in _collect_summaries_concurrently(
-            target_nodes, CONFIGFS_TARGET_PATH
-        ):
+        for summary in _collect_summaries_concurrently(target_nodes, True):
             if summary["errors"]:
                 errors[summary["node"]] = "; ".join(summary["errors"])
             node_results.append(summary)
@@ -1028,7 +999,7 @@ def cmd_get_metrics(args) -> None:
                     if backup_source:
                         comparison_sources[summary["node"]] = backup_source
 
-        initiator_nodes, initiator_error = get_target_nodes(args.initiator_selector)
+        initiator_nodes, initiator_error = get_kubernetes_nodes(args.initiator_selector)
         if initiator_error:
             errors["initiator_cluster"] = initiator_error
 
@@ -1055,31 +1026,41 @@ def cmd_get_metrics(args) -> None:
         "errors": errors,
         "initiator_stats": initiator_stats,
     }
-    emit_output(report,formatter=format_report)
+    emit_output(report, formatter=format_report)
+
 
 def cmd_get_sessions(args) -> None:
     if args.name:
         labels, label_error = get_node_labels(args.name)
+        if label_error:
+            raise SystemExit("Error getting sessions: " + label_error)
         role = detect_node_role(labels) if labels else "unknown"
         if role != "initiator":
-            raise SystemExit(f"{args.name}: role is '{role}', this command is only valid for initiator nodes")
+            raise SystemExit(
+                f"{args.name}: role is '{role}', this command is only valid for initiator nodes"
+            )
         payload = build_initiator_node_summary(args.name)
     else:
-        nodes, error = get_target_nodes(args.label)
+        nodes, error = get_kubernetes_nodes(args.label)
         if error:
             raise SystemExit(error)
         payload = {"nodes": _collect_initiator_summaries_concurrently(nodes)}
-    emit_output(payload,formatter=format_sessions_output)
+    emit_output(payload, formatter=format_sessions_output)
+
 
 def cmd_get_mount_status(args) -> None:
     if args.name:
         labels, label_error = get_node_labels(args.name)
+        if label_error:
+            raise SystemExit("Error getting mount-status: " + label_error)
         role = detect_node_role(labels) if labels else "unknown"
         if role != "initiator":
-            raise SystemExit(f"{args.name}: role is '{role}', this command is only valid for initiator nodes")
+            raise SystemExit(
+                f"{args.name}: role is '{role}', this command is only valid for initiator nodes"
+            )
         payload = build_initiator_mount_status(args.name)
     else:
-        nodes, error = get_target_nodes(args.label)
+        nodes, error = get_kubernetes_nodes(args.label)
         if error:
             raise SystemExit(error)
         payload = {"nodes": _collect_initiator_mount_status_concurrently(nodes)}

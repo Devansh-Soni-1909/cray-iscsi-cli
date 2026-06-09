@@ -10,9 +10,13 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 DEFAULT_TARGET_SELECTOR = "iscsi-target=true"
 DEFAULT_INITIATOR_SELECTOR = "iscsi-role=initiator"
-SAVECONFIG_PATHS = ["/etc/rtslib-fb-target/saveconfig.json", "/etc/target/saveconfig.json"]
+SAVECONFIG_PATHS = [
+    "/etc/rtslib-fb-target/saveconfig.json",
+    "/etc/target/saveconfig.json",
+]
 BACKUP_PATHS = ["/etc/rtslib-fb-target/backup", "/etc/target/backup"]
- 
+TARGET_METRICS_BASE_PATH = "/sys/kernel/config/target/iscsi"
+
 
 @dataclass
 class LunImage:
@@ -35,6 +39,12 @@ class NodeErrorReport:
     source: str
     severity: str
     message: str
+
+
+@dataclass
+class TpgtInfo:
+    tag: int
+    tpgt_name: str
 
 
 def run_command(command: str) -> subprocess.CompletedProcess:
@@ -132,7 +142,7 @@ def run_kubectl_json(command: str) -> Tuple[dict, Optional[str]]:
         return {}, f"invalid JSON output: {exc}"
 
 
-def get_target_nodes(node_selector: str) -> Tuple[List[str], Optional[str]]:
+def get_kubernetes_nodes(node_selector: str) -> Tuple[List[str], Optional[str]]:
     command = (
         "kubectl get nodes "
         f"-l {node_selector} "
@@ -224,7 +234,9 @@ def _parse_path(path: str) -> Tuple[Optional[str], Optional[int]]:
 def list_config_versions(node: str) -> Tuple[List[str], str | None]:
     last_error = None
     for path in BACKUP_PATHS:
-        cmd = f'pdsh -w {node} "sudo find {path} -maxdepth 1 -type f 2>/dev/null | sort"'
+        cmd = (
+            f'pdsh -w {node} "sudo find {path} -maxdepth 1 -type f 2>/dev/null | sort"'
+        )
         output, error = run_pdsh_lines(cmd)
         if error:
             last_error = error
@@ -233,11 +245,13 @@ def list_config_versions(node: str) -> Tuple[List[str], str | None]:
             last_error = f"Empty directory or No directory found at the {path}"
             continue
         return output, None
-    return None, last_error
+    return [], last_error
 
 
 def read_backup_config_file(node: str, path: str):
-    remote_reader = f"sudo gzip -dc {path}" if path.endswith(".gz") else f"sudo cat {path}"
+    remote_reader = (
+        f"sudo gzip -dc {path}" if path.endswith(".gz") else f"sudo cat {path}"
+    )
     cmd = f'pdsh -w {node} "{remote_reader}"'
     output, error = run_pdsh_text(cmd)
     if error:
@@ -262,55 +276,116 @@ def list_iqns(node: str) -> Tuple[List[str], List[str]]:
     return iqns, []
 
 
-def list_tpgts(node: str) -> Tuple[List[str], List[str]]:
+def list_tpgts(node: str, iqn: str) -> Tuple[List[TpgtInfo], List[str]]:
     data, error = get_saveconfig(node)
     if error:
         return [], [error]
-    tpgts = []
+    tpgts: List[TpgtInfo] = []
     for target in data.get("targets", []):
-        if target.get("fabric") == "iscsi" and "wwn" in target:
+        if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
             for tpg in target.get("tpgs", []):
                 if "tag" in tpg:
-                    tpgts.append(f"tpgt_{tpg['tag']}")
+                    tag = tpg["tag"]
+                    tpgts.append(TpgtInfo(tag=tag, tpgt_name=f"tpgt_{tag}"))
     return tpgts, []
 
 
-def list_luns(node: str, lun_path: str) -> Tuple[List[str], List[str]]:
+def list_acls(node: str, iqn: str, tpgt_tag: int) -> Tuple[List[str], List[str]]:
     data, error = get_saveconfig(node)
     if error:
         return [], [error]
-    iqn, tpgt_tag = _parse_path(lun_path)
-    if not iqn or tpgt_tag is None:
-        return [], [f"{node}: could not parse IQN/TPGT from path: {lun_path}"]
+
+    acls = []
+    for target in data.get("targets", []):
+        if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
+            for tpg in target.get("tpgs", []):
+                if int(tpg.get("tag")) == tpgt_tag:
+                    for acl in tpg.get("node_acls", []):
+                        if "node_wwn" in acl:
+                            acls.append(acl["node_wwn"])
+    return acls, []
+
+
+def list_luns(node: str, iqn: str, tpgt_tag: int) -> Tuple[List[str], List[str]]:
+    data, error = get_saveconfig(node)
+    if error:
+        return [], [error]
 
     luns = []
     for target in data.get("targets", []):
         if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
             for tpg in target.get("tpgs", []):
-                if tpg.get("tag") == tpgt_tag:
+                if int(tpg.get("tag")) == tpgt_tag:
                     for lun in tpg.get("luns", []):
                         if "index" in lun:
                             luns.append(f"lun_{lun['index']}")
     return luns, []
 
 
-def list_acls(node: str, acl_path: str) -> Tuple[List[str], List[str]]:
+def get_image_udev_path(node: str, plugin: str, name: str) -> Tuple[str, List[str]]:
     data, error = get_saveconfig(node)
     if error:
         return [], [error]
-    iqn, tpgt_tag = _parse_path(acl_path)
-    if not iqn or tpgt_tag is None:
-        return [], [f"{node}: could not parse IQN/TPGT from path: {acl_path}"]
 
-    acls = []
+    for object in data.get("storage_objects"):
+        if object.get("plugin") == plugin and object.get("name") == name:
+            path = object.get("dev")
+            if path:
+                return path, None
+    return (
+        None,
+        f"No storage object in the {node} matches the given plugin:{plugin} and name:{name}",
+    )
+
+
+def infer_image_type(identity: str) -> str:
+    lowered = identity.lower()
+    if "rootfs" in lowered:
+        return "rootfs"
+    if re.search(r"(^|[^a-z])pe([^a-z]|$)", lowered) or "pe_" in lowered:
+        return "pe"
+    return "unknown"
+
+
+def list_images(node: str, iqn: str, tpgt_tag: int) -> Tuple[List[LunImage], List[str]]:
+    data, error = get_saveconfig(node)
+    if error:
+        return [], [error]
+
+    images: List[LunImage] = []
     for target in data.get("targets", []):
         if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
             for tpg in target.get("tpgs", []):
-                if tpg.get("tag") == tpgt_tag:
-                    for acl in tpg.get("node_acls", []):
-                        if "node_wwn" in acl:
-                            acls.append(acl["node_wwn"])
-    return acls, []
+                if int(tpg.get("tag")) == tpgt_tag:
+                    for lun in tpg.get("luns", []):
+                        if "index" in lun:
+                            parts = lun.get("storage_object").rstrip("/").split("/")
+                            if len(parts) >= 2:
+                                plugin = parts[-2]
+                                name = parts[-1]
+                                udev_path, error = get_image_udev_path(
+                                    node, plugin, name
+                                )
+                                if error:
+                                    return [], [error]
+                                image_name = udev_path.rstrip("").split("/")[-1]
+                                image_type = infer_image_type(udev_path)
+                                images.append(
+                                    LunImage(
+                                        node=node,
+                                        iqn=iqn,
+                                        tpgt_name=f"tpgt_{tpgt_tag}",
+                                        lun_id=lun.get("index"),
+                                        lun_name=name,
+                                        image_name=image_name,
+                                        image_type=image_type,
+                                        object_path=lun.get("storage_object"),
+                                        udev_path=udev_path,
+                                        read_mbytes=0,
+                                        read_iops=0,
+                                    )
+                                )
+    return images, []
 
 
 def parse_metric_value(raw_output: str) -> int:
@@ -325,69 +400,11 @@ def parse_metric_value(raw_output: str) -> int:
         return 0
 
 
-def resolve_object_path(
-    node: str, lun_path: str, lun_name: str
-) -> Tuple[str, Optional[str]]:
-    data, error = get_saveconfig(node)
-    if error:
-        return "", error
-    iqn, tpgt_tag = _parse_path(lun_path)
-    if not iqn or tpgt_tag is None:
-        return "", f"{node}: could not parse IQN/TPGT from path: {lun_path}"
-
-    try:
-        lun_index = int(lun_name.split("_")[1])
-    except (ValueError, IndexError):
-        return "", f"{node}: invalid LUN name format: {lun_name}"
-
-    for target in data.get("targets", []):
-        if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
-            for tpg in target.get("tpgs", []):
-                if tpg.get("tag") == tpgt_tag:
-                    for lun in tpg.get("luns", []):
-                        if lun.get("index") == lun_index:
-                            storage_object = lun.get("storage_object")
-                            if storage_object:
-                                parts = storage_object.rstrip("/").split("/")
-                                if len(parts) >= 2:
-                                    plugin = parts[-2]
-                                    name = parts[-1]
-                                    for obj in data.get("storage_objects", []):
-                                        if (
-                                            obj.get("plugin") == plugin
-                                            and obj.get("name") == name
-                                        ):
-                                            dev = obj.get("dev", "")
-                                            return dev, None
-                                    return (
-                                        "",
-                                        f"{node}: storage object not found for plugin {plugin} name {name}",
-                                    )
-                                return (
-                                    "",
-                                    f"{node}: invalid storage_object path format: {storage_object}",
-                                )
-
-    return (
-        "",
-        f"{node}: no storage_object found for target {iqn} TPGT {tpgt_tag} LUN {lun_index}",
-    )
-
-
-def infer_image_type(identity: str) -> str:
-    lowered = identity.lower()
-    if "rootfs" in lowered:
-        return "rootfs"
-    if re.search(r"(^|[^a-z])pe([^a-z]|$)", lowered) or "pe_" in lowered:
-        return "pe"
-    return "unknown"
-
-
 def read_lun_stats(
-    node: str, lun_path: str, lun_name: str
+    node: str, iqn: str, tpgt_tag: str, lun_index: str
 ) -> Tuple[Dict[str, int], List[str]]:
     errors: List[str] = []
-    stats_path = f"{lun_path}/{lun_name}/statistics/scsi_tgt_port"
+    stats_path = f"{TARGET_METRICS_BASE_PATH}/{iqn}/tpgt_{tpgt_tag}/lun/lun_{lun_index}/statistics/scsi_tgt_port"
 
     remote_script = (
         f"mbytes=$(cat {stats_path}/read_mbytes 2>/dev/null); "
@@ -497,18 +514,30 @@ def compare_snapshots(
     previous_snapshot: dict,
 ) -> dict:
     return {
-        "iqns_added": current_snapshot.get("iqns", set()) - previous_snapshot.get("iqns", set()),
-        "iqns_removed": previous_snapshot.get("iqns", set()) - current_snapshot.get("iqns", set()),
-        "tpgs_added": current_snapshot.get("tpgs", set()) - previous_snapshot.get("tpgs", set()),
-        "tpgs_removed": previous_snapshot.get("tpgs", set()) - current_snapshot.get("tpgs", set()),
-        "luns_added": current_snapshot.get("luns", set()) - previous_snapshot.get("luns", set()),
-        "luns_removed": previous_snapshot.get("luns", set()) - current_snapshot.get("luns", set()),
-        "acls_added": current_snapshot.get("acls", set()) - previous_snapshot.get("acls", set()),
-        "acls_removed": previous_snapshot.get("acls", set()) - current_snapshot.get("acls", set()),
-        "storage_objects_added": current_snapshot.get("storage_objects", set()) - previous_snapshot.get("storage_objects", set()),
-        "storage_objects_removed": previous_snapshot.get("storage_objects", set()) - current_snapshot.get("storage_objects", set()),
-        "rootfs_deleted": previous_snapshot.get("rootfs_images", set()) - current_snapshot.get("rootfs_images", set()),
-        "pe_deleted": previous_snapshot.get("pe_images", set()) - current_snapshot.get("pe_images", set()),
+        "iqns_added": current_snapshot.get("iqns", set())
+        - previous_snapshot.get("iqns", set()),
+        "iqns_removed": previous_snapshot.get("iqns", set())
+        - current_snapshot.get("iqns", set()),
+        "tpgs_added": current_snapshot.get("tpgs", set())
+        - previous_snapshot.get("tpgs", set()),
+        "tpgs_removed": previous_snapshot.get("tpgs", set())
+        - current_snapshot.get("tpgs", set()),
+        "luns_added": current_snapshot.get("luns", set())
+        - previous_snapshot.get("luns", set()),
+        "luns_removed": previous_snapshot.get("luns", set())
+        - current_snapshot.get("luns", set()),
+        "acls_added": current_snapshot.get("acls", set())
+        - previous_snapshot.get("acls", set()),
+        "acls_removed": previous_snapshot.get("acls", set())
+        - current_snapshot.get("acls", set()),
+        "storage_objects_added": current_snapshot.get("storage_objects", set())
+        - previous_snapshot.get("storage_objects", set()),
+        "storage_objects_removed": previous_snapshot.get("storage_objects", set())
+        - current_snapshot.get("storage_objects", set()),
+        "rootfs_deleted": previous_snapshot.get("rootfs_images", set())
+        - current_snapshot.get("rootfs_images", set()),
+        "pe_deleted": previous_snapshot.get("pe_images", set())
+        - current_snapshot.get("pe_images", set()),
     }
 
 

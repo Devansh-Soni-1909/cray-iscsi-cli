@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple
 from .common import run_pdsh_lines, run_pdsh_text
 from .error_reporting import collect_node_diagnostics
 
- 
+
 def _parse_lsblk_iscsi_lines(output: str) -> List[dict]:
     mounts: List[dict] = []
     for line in output.splitlines():
@@ -27,15 +27,17 @@ def _parse_lsblk_iscsi_lines(output: str) -> List[dict]:
             image_name = os.path.basename(mount_point.rstrip("/"))
         else:
             last_char = device_name[-1]
-            lun_number = ord(last_char) - ord('a')
+            lun_number = ord(last_char) - ord("a")
             image_name = f"lun{lun_number}"
         status = "mounted" if mount_point.startswith("/") else "unmounted"
-        mounts.append({
-            "device": f"/dev/{device_name}",
-            "image_name": image_name,
-            "mount_point": mount_point,
-            "status": status,
-        })
+        mounts.append(
+            {
+                "device": f"/dev/{device_name}",
+                "image_name": image_name,
+                "mount_point": mount_point,
+                "status": status,
+            }
+        )
     mounts.sort(key=lambda entry: entry["device"])
     return mounts
 
