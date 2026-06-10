@@ -48,7 +48,7 @@ from .formatter import (
 
 
 def cmd_get_nodes(args) -> None:
-    label = args.label or args.default_target_label
+    label = args.label or DEFAULT_TARGET_SELECTOR
     nodes, error = get_kubernetes_nodes(label)
     if error:
         raise SystemExit(error)

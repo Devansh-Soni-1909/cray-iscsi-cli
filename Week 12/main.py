@@ -19,11 +19,6 @@ from modules import (
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="iscsi", description="Standalone iSCSI CLI")
-    parser.add_argument(
-        "--default-target-label",
-        default=DEFAULT_TARGET_SELECTOR,
-        help="Default Kubernetes label selector for target nodes",
-    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     get_parser = subparsers.add_parser("get", help="Read-only iSCSI commands")
