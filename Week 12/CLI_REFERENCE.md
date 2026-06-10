@@ -46,7 +46,7 @@ iscsi
 
 ---
 
-# Target Nodes
+# Target Node Commands
 
 
 # get nodes
@@ -307,7 +307,7 @@ lun_9 pe       pe_disk8.img       0             96
 
 ---
 
-# Initiator Nodes
+# Initiator Node Commands
 
 
 # get sessions
