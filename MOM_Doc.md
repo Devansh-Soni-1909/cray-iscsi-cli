@@ -149,11 +149,22 @@ Feedback & Next Action Items:
 - Note: Try to write code on your own
 
 
+Date: 10/06/2026
+Feedback on iscsi commands documentation
 
-
-
-
-
-
+- We need to have a dummy string like cray or anything else instead of the python3 iscsi_cli.py
+- Label for the initiator node is not required
+- instead of get node we can have get target_nodes
+- means we have to update the what type of **node name** it is in every commands.. so that the plugin can work(very important)
+- we can mimic the real path of the images in get images command...
+- we also have to add some documentation with having the optional commands
+- can we have a directory for the output data from master node... any kind of json or any type file to store the output data...
+- we can have mounted or unmounted nodes for error documentation..
+- we need to add the module of th iscsi also
+- how we are configuring between target and initiator as all are kubernetes nodes...
+- if we have multiple paths then we can have a alert the issue so that to sustain on the system on the so to track the health status of the system... we can take it as a learning of multipathing stuff...
+- can we have the data of the last 2 to 3 days for comparing the updates of the images...
+- write operations and multipathing..
+ 
 
 
