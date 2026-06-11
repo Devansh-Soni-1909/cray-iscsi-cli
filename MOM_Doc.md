@@ -183,16 +183,17 @@ CLI Commands Plan Discussion
 Date: 10/06/2026
 Feedback on iscsi commands documentation
 
-- We need to have a dummy string like cray or anything else instead of the python3 iscsi_cli.py
-- Label for the initiator node is not required
-- instead of get node we can have get target_nodes
-- means we have to update the what type of **node name** it is in every commands.. so that the plugin can work(very important)
-- we can mimic the real path of the images in get images command...
-- we also have to add some documentation with having the optional commands
-- can we have a directory for the output data from master node... any kind of json or any type file to store the output data...
-- we can have mounted or unmounted nodes for error documentation..
-- we need to add the module of th iscsi also
-- how we are configuring between target and initiator as all are kubernetes nodes...
-- if we have multiple paths then we can have a alert the issue so that to sustain on the system on the so to track the health status of the system... we can take it as a learning of multipathing stuff...
-- can we have the data of the last 2 to 3 days for comparing the updates of the images...
-- write operations and multipathing..
+- We should use a dummy command name such as cray (or any other placeholder) instead of python3 iscsi_cli.py in the documentation.
+- The label for the Initiator Node is not required and can be removed.
+- Instead of get node, we can use get target_nodes for better clarity.
+- We need to clearly mention the type of node (Target Node, Initiator Node, etc.) in every command so that the plugin can work correctly. This is very important.
+- For the get images command, we can mimic the actual image path structure.
+- Additional documentation should be added for optional command parameters and their usage.
+- We can create a dedicated directory on the master node to store output data, such as JSON files or other structured formats.
+- Documentation should include mounted and unmounted node states along with possible error scenarios.
+- We should also add documentation for the iSCSI module itself.
+- The documentation should explain how communication and configuration happen between target and initiator nodes when all systems are Kubernetes nodes.
+- If multiple paths are available, we can generate alerts for path-related issues to help monitor system health and improve reliability. This can also serve as a
+  learning point for multipathing.
+- It would be useful to maintain data from the last 2–3 days to compare image updates and track changes over time.
+- Documentation should also cover write operations and multipathing behavior.
