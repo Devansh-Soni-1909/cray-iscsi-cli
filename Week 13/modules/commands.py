@@ -24,6 +24,7 @@ from .iscsi_target import (
     get_saveconfig,
     summarize_requested_node,
     collect_summaries_concurrently,
+    list_config_versions,
 )
 from .iscsi_initiator import (
     build_initiator_mount_status,
@@ -39,17 +40,20 @@ from .error_collector import (
 )
 
 from .formatter import (
-    format_error_summary,
-    format_images_output,
-    format_luns_output,
-    format_mount_status_output,
     format_nodes_output,
-    format_report,
-    format_sessions_output,
-    format_target_summary,
+    format_configs_output,
     format_tpgts_output,
+    format_luns_output,
+    format_images_output,
+    format_sessions_output,
+    format_mount_status_output,
+    format_error_summary,
+    format_target_summary,
+    format_report,
     emit_output,
 )
+
+# get commands
 
 
 def cmd_get_nodes(args) -> None:
@@ -87,23 +91,27 @@ def cmd_get_nodes(args) -> None:
     )
 
 
-def cmd_describe_node(args) -> None:
-    with_metrics = True if args.metrics else False
+def cmd_get_configs(args) -> None:
     if args.name:
-        summary, error = summarize_requested_node(args.name, with_metrics)
+        labels, error = get_node_labels(args.name)
         if error:
             raise SystemExit(error)
-        emit_output(summary, formatter=format_target_summary)
-        return
-
-    label = args.label or DEFAULT_TARGET_SELECTOR
-    nodes, error = get_kubernetes_nodes(label)
-    if error:
-        raise SystemExit(error)
-    emit_output(
-        {"label": label, "nodes": nodes, "count": len(nodes)},
-        formatter=format_nodes_output,
-    )
+        role = detect_node_role(labels=labels)
+        if role != "target":
+            raise SystemExit(
+                f"{args.name}: role is '{role},  this command is only valid for target nodes"
+            )
+        current, versions, error = list_config_versions(args.name)
+        if error:
+            raise SystemExit(
+                f"Error fetching configuration files from {args.name}: {error}"
+            )
+        emit_output(
+            {"node": args.name, "current_config": current, "versions": versions},
+            formatter=format_configs_output,
+        )
+    else:
+        raise SystemExit(f"Please provide the node name with the flag --name")
 
 
 def cmd_get_luns(args) -> None:
@@ -452,3 +460,27 @@ def cmd_get_errors(args) -> None:
                 )
 
     emit_output(payload, args.json, formatter=format_error_summary)
+
+
+# describe commands
+def cmd_describe_node(args) -> None:
+    with_metrics = True if args.metrics else False
+    if args.name:
+        summary, error = summarize_requested_node(args.name, with_metrics)
+        if error:
+            raise SystemExit(error)
+        emit_output(summary, formatter=format_target_summary)
+        return
+
+    label = args.label or DEFAULT_TARGET_SELECTOR
+    nodes, error = get_kubernetes_nodes(label)
+    if error:
+        raise SystemExit(error)
+    emit_output(
+        {"label": label, "nodes": nodes, "count": len(nodes)},
+        formatter=format_nodes_output,
+    )
+
+
+def cmd_describe_config(args) -> None:
+    return

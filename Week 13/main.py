@@ -6,6 +6,7 @@ from modules import (
     DEFAULT_INITIATOR_SELECTOR,
     DEFAULT_TARGET_SELECTOR,
     cmd_get_nodes,
+    cmd_get_configs,
     cmd_get_tpgts,
     cmd_get_luns,
     cmd_get_images,
@@ -14,6 +15,7 @@ from modules import (
     cmd_get_mount_status,
     cmd_get_errors,
     cmd_describe_node,
+    cmd_describe_config,
 )
 
 
@@ -24,6 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     get_parser = subparsers.add_parser("get", help="Read-only iSCSI commands")
     get_subparsers = get_parser.add_subparsers(dest="get_command", required=True)
 
+    # cmd: get node
     nodes_parser = get_subparsers.add_parser("nodes", help="List iSCSI target nodes")
     nodes_parser.add_argument(
         "--target",
@@ -39,27 +42,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     nodes_parser.set_defaults(func=cmd_get_nodes)
 
-    describe_parser = subparsers.add_parser(
-        "describe", help="Detailed iSCSI resource descriptions"
+    # cmd: get configs
+    configs_parser = get_subparsers.add_parser(
+        "configs", help="List all the target node configuration versions"
     )
-    describe_subparsers = describe_parser.add_subparsers(
-        dest="describe_command", required=True
-    )
+    configs_parser.add_argument("--name", default=None, help="Target node to inspect")
+    configs_parser.set_defaults(func=cmd_get_configs)
 
-    node_parser = describe_subparsers.add_parser(
-        "node", help="Show a detailed iSCSI summary for one node"
-    )
-    node_parser.add_argument("--name", default=None, help="Node name to inspect")
-    node_parser.add_argument(
-        "--label",
-        default=DEFAULT_TARGET_SELECTOR,
-        help="Kubernetes label selector for iSCSI nodes when listing",
-    )
-    node_parser.add_argument(
-        "--metrics", action="store_true", default=False, help="Include LUN metrics"
-    )
-    node_parser.set_defaults(func=cmd_describe_node)
-
+    # cmd: get luns
     luns_parser = get_subparsers.add_parser(
         "luns", help="List LUNs for one or more target nodes"
     )
@@ -75,12 +65,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     luns_parser.set_defaults(func=cmd_get_luns)
 
+    # cmd: get tpgts
     tpgts_parser = get_subparsers.add_parser(
         "tpgts", help="List TPGTs for one or more target nodes"
     )
     tpgts_parser.add_argument("--name", default=None, help="Target node to inspect")
     tpgts_parser.set_defaults(func=cmd_get_tpgts)
 
+    # cmd: get images
     images_parser = get_subparsers.add_parser("images", help="List projected images")
     images_parser.add_argument("--name", default=None, help="Target node to inspect")
     images_parser.add_argument(
@@ -94,6 +86,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     images_parser.set_defaults(func=cmd_get_images)
 
+    # cmd: get metrics
     metrics_parser = get_subparsers.add_parser("metrics", help="Show iSCSI metrics")
     metrics_parser.add_argument("--name", default=None, help="Target node to inspect")
     metrics_parser.add_argument(
@@ -108,6 +101,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     metrics_parser.set_defaults(func=cmd_get_metrics)
 
+    # cmd: get sessions
     sessions_parser = get_subparsers.add_parser(
         "sessions", help="Show initiator mount/session state"
     )
@@ -121,6 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sessions_parser.set_defaults(func=cmd_get_sessions)
 
+    # cmd: get mount-status
     mount_status_parser = get_subparsers.add_parser(
         "mount-status", help="Show initiator mount status"
     )
@@ -134,6 +129,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     mount_status_parser.set_defaults(func=cmd_get_mount_status)
 
+    # cmd: get errors
     errors_parser = get_subparsers.add_parser(
         "errors", help="Scan recent logs for storage and network errors"
     )
@@ -150,6 +146,37 @@ def build_parser() -> argparse.ArgumentParser:
         help="Number of recent log lines to collect per node",
     )
     errors_parser.set_defaults(func=cmd_get_errors)
+
+    describe_parser = subparsers.add_parser(
+        "describe", help="Detailed iSCSI resource descriptions"
+    )
+    describe_subparsers = describe_parser.add_subparsers(
+        dest="describe_command", required=True
+    )
+    # cmd: describe node
+    node_parser = describe_subparsers.add_parser(
+        "node", help="Show a detailed iSCSI summary for one node"
+    )
+    node_parser.add_argument("--name", default=None, help="Node name to inspect")
+    node_parser.add_argument(
+        "--label",
+        default=DEFAULT_TARGET_SELECTOR,
+        help="Kubernetes label selector for iSCSI nodes when listing",
+    )
+    node_parser.add_argument(
+        "--metrics", action="store_true", default=False, help="Include LUN metrics"
+    )
+    node_parser.set_defaults(func=cmd_describe_node)
+
+    # cmd: describe config
+    config_parser = describe_subparsers.add_parser(
+        "config", help="Show a detailed summary of the mentioned node"
+    )
+    config_parser.add_argument("--node", default=None, help="None name to inspect")
+    config_parser.add_argument(
+        "--file", default=None, help="File name of the target node to describe"
+    )
+    config_parser.set_defaults(func=cmd_describe_config)
 
     return parser
 

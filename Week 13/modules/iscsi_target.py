@@ -60,21 +60,63 @@ def get_saveconfig(node: str) -> Tuple[Optional[dict], Optional[str]]:
     return None, err_msg
 
 
-def list_config_versions(node: str) -> Tuple[List[str], str | None]:
+def list_config_versions(
+    node: str,
+) -> Tuple[str | None, List[Tuple[str, str]], str | None]:
     last_error = None
-    for path in BACKUP_PATHS:
-        cmd = (
-            f'pdsh -w {node} "sudo find {path} -maxdepth 1 -type f 2>/dev/null | sort"'
-        )
+    current_config = None
+
+    # Find current config
+    for config_path in SAVECONFIG_PATHS:
+        cmd = f'pdsh -w {node} "sudo test -f {config_path} && sudo echo {config_path}"'
+
         output, error = run_pdsh_lines(cmd)
+
+        if output:
+            current_config = output[0].strip()
+            break
+
+    # Find backup configs
+    for backup_path in BACKUP_PATHS:
+        cmd = (
+            f"pdsh -w {node} "
+            f'"sudo find {backup_path} -maxdepth 1 -type f 2>/dev/null | sort"'
+        )
+
+        output, error = run_pdsh_lines(cmd)
+
         if error:
             last_error = error
             continue
+
         if not output:
-            last_error = f"Empty directory or No directory found at the {path}"
+            last_error = f"Empty directory or No directory found at {backup_path}"
             continue
-        return output, None
-    return [], last_error
+
+        versions: List[Tuple[str, str]] = []
+
+        for filepath in output:
+            filename = Path(filepath).name
+
+            match = re.search(
+                r"saveconfig-(\d{8})-(\d{2}:\d{2}:\d{2})",
+                filename,
+            )
+
+            if match:
+                dt = datetime.strptime(
+                    f"{match.group(1)} {match.group(2)}",
+                    "%Y%m%d %H:%M:%S",
+                )
+                timestamp = dt.strftime("%d %b %Y %I:%M:%S %p")
+            else:
+                timestamp = "Unknown"
+
+            versions.append((filepath, timestamp))
+
+        return current_config, versions, None
+
+    return current_config, [], last_error
 
 
 def read_backup_config_file(node: str, path: str):
@@ -502,13 +544,13 @@ def load_backup_snapshot(
             last_error = error
         return None, last_error, compare_config
 
-    versions, error = list_config_versions(node)
+    _, versions, error = list_config_versions(node)
     if error:
         return None, error, None
     if not versions:
         return None, None, None
 
-    backup_path = versions[0]
+    backup_path = versions[0][0]
     backup_config, backup_error = read_backup_config_file(node, backup_path)
     return backup_config, backup_error, backup_path
 

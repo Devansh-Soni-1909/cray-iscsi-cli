@@ -1,4 +1,5 @@
 from typing import List, Sequence
+from pathlib import Path
 
 
 def render_table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> str:
@@ -568,5 +569,37 @@ def format_error_summary(payload: dict) -> str:
         lines.append("")
         lines.append("Recent logs")
         lines.append(payload["logs"])
+
+    return "\n".join(lines)
+
+
+def format_configs_output(payload: dict) -> str:
+    node = payload.get("node", "")
+    current_config = payload.get("current_config")
+    versions = payload.get("versions", [])
+
+    lines = [f"Node: {node}", ""]
+
+    lines.append("Current Configuration")
+    lines.append("---------------------")
+    if current_config:
+        current_path = Path(current_config)
+        lines.append(f"{current_path.name} ({current_path})")
+    else:
+        lines.append("None")
+
+    lines.append("")
+    lines.append("Backup Configurations")
+    lines.append("---------------------")
+
+    if not versions:
+        lines.append("None")
+        return "\n".join(lines)
+
+    headers = ["DATE", "FILE", "PATH"]
+
+    rows = [[date, Path(filepath).name, filepath] for filepath, date in versions]
+
+    lines.append(render_table(headers, rows))
 
     return "\n".join(lines)
