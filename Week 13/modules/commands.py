@@ -25,6 +25,7 @@ from .iscsi_target import (
     summarize_requested_node,
     collect_summaries_concurrently,
     list_config_versions,
+    build_backup_config_summary,
 )
 from .iscsi_initiator import (
     build_initiator_mount_status,
@@ -467,6 +468,7 @@ def cmd_describe_node(args) -> None:
     with_metrics = True if args.metrics else False
     if args.name:
         summary, error = summarize_requested_node(args.name, with_metrics)
+        print(summary)
         if error:
             raise SystemExit(error)
         emit_output(summary, formatter=format_target_summary)
@@ -483,4 +485,17 @@ def cmd_describe_node(args) -> None:
 
 
 def cmd_describe_config(args) -> None:
-    return
+    if args.node:
+        if args.file_path:
+            payload, error = build_backup_config_summary(args.node, args.file_path)
+            if error:
+                raise SystemExit(
+                    f"Error describing config {args.file_path} in {args.node}: {error}"
+                )
+            emit_output(payload, formatter=format_target_summary)
+        else:
+            raise SystemExit(
+                "Please provide configuraiton file path with --file-path flag"
+            )
+    else:
+        raise SystemExit("Please provide a node name with --node flag")

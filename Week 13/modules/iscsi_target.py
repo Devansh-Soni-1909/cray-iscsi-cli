@@ -624,58 +624,92 @@ def summarize_requested_node(
     return target_summary, None
 
 
-def build_report(
-    nodes: List[str],
-    node_results: List[dict],
-    deleted_by_node: Dict[str, List[dict]],
-    state_path: Path,
-    errors: Dict[str, str],
-    initiator_stats: Dict[str, Dict],
-) -> dict:
-    summaries: List[dict] = []
-    deleted_images: List[dict] = []
-    for node_result in node_results:
-        deleted_images_for_node = deleted_by_node.get(node_result["node"], [])
-        summaries.append(
-            {
-                "node": node_result["node"],
-                "iqns": node_result.get("iqns", []),
-                "tpgt_count": node_result.get("tpgt_count", 0),
-                "lun_count": node_result.get("lun_count", 0),
-                "total_active_images": node_result.get("total_active_images", 0),
-                "rootfs_count": node_result.get("rootfs_count", 0),
-                "pe_count": node_result.get("pe_count", 0),
-                "deleted_rootfs": sum(
-                    1
-                    for image in deleted_images_for_node
-                    if image.get("image_type") == "rootfs"
-                ),
-                "deleted_pe": sum(
-                    1
-                    for image in deleted_images_for_node
-                    if image.get("image_type") == "pe"
-                ),
-                "read_mbytes": node_result.get("read_mbytes", 0),
-                "read_iops": node_result.get("read_iops", 0),
-                "images": node_result.get("images", []),
-                "diagnostics": node_result.get("diagnostics", []),
-                "role": node_result.get("role", "unknown"),
-            }
-        )
-        for image in deleted_images_for_node:
-            deleted_images.append({"node": node_result["node"], **image})
+def build_backup_config_summary(
+    node: str,
+    file_path: str,
+) -> Tuple[dict, str | None]:
+    config_data, error = read_backup_config_file(node, file_path)
+    if error:
+        return {}, error
 
-    return {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "nodes": nodes,
-        "nodes_summary": summaries,
-        "deleted_images": deleted_images,
-        "errors": errors,
-        "initiator_stats": initiator_stats,
-        "state_file": str(state_path),
-        "defaults": {
-            "node_selector": DEFAULT_TARGET_SELECTOR,
-            "initiator_selector": DEFAULT_INITIATOR_SELECTOR,
-            "configfs_path": TARGET_METRICS_BASE_PATH,
-        },
+    storage_objects = config_data.get("storage_objects", [])
+    targets = config_data.get("targets", [])
+
+    iqns = []
+    tpgts = []
+    images = []
+
+    rootfs_count = 0
+    pe_count = 0
+    unknown_count = 0
+
+    storage_by_name = {
+        storage_object["name"]: storage_object for storage_object in storage_objects
     }
+
+    for target in targets:
+        iqn = target.get("wwn", "")
+        iqns.append(iqn)
+
+        for tpgt in target.get("tpgs", []):
+            tpgt_name = str(tpgt.get("tag", ""))
+
+            tpgts.append(
+                {
+                    "iqn": iqn,
+                    "tpgt_name": tpgt_name,
+                    "lun_count": len(tpgt.get("luns", [])),
+                    "acl_count": len(tpgt.get("node_acls", [])),
+                    "acl_names": [
+                        acl.get("node_wwn", "") for acl in tpgt.get("node_acls", [])
+                    ],
+                }
+            )
+
+            for lun in tpgt.get("luns", []):
+                storage_path = lun.get("storage_object", "")
+                storage_name = storage_path.split("/")[-1]
+
+                storage_object = storage_by_name.get(storage_name, {})
+
+                if storage_name.startswith("rootfs_"):
+                    image_type = "rootfs"
+                    rootfs_count += 1
+                elif storage_name.startswith("pe_"):
+                    image_type = "pe"
+                    pe_count += 1
+                else:
+                    image_type = "unknown"
+                    unknown_count += 1
+
+                images.append(
+                    {
+                        "iqn": iqn,
+                        "tpgt_name": tpgt_name,
+                        "lun_name": str(lun.get("index", "")),
+                        "image_type": image_type,
+                        "image_name": storage_name,
+                        "udev_path": storage_object.get("dev", ""),
+                        "read_mbytes": "N/A",
+                        "read_iops": "N/A",
+                    }
+                )
+
+    summary = {
+        "node": node,
+        "role": "target",
+        "config_file": Path(file_path).name,
+        "file_path": file_path,
+        "iqns": sorted(set(iqns)),
+        "tpgts": tpgts,
+        "tpgt_count": len(tpgts),
+        "lun_count": len(images),
+        "total_active_images": len(images),
+        "rootfs_count": rootfs_count,
+        "pe_count": pe_count,
+        "unknown_count": unknown_count,
+        "images": images,
+        "with_metrics": False,
+        "errors": [],
+    }
+    return summary, None

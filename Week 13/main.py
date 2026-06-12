@@ -174,7 +174,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     config_parser.add_argument("--node", default=None, help="None name to inspect")
     config_parser.add_argument(
-        "--file", default=None, help="File name of the target node to describe"
+        "--file-path", default=None, help="Path of the configuration file to describe"
     )
     config_parser.set_defaults(func=cmd_describe_config)
 
