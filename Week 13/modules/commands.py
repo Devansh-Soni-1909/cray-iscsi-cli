@@ -17,12 +17,7 @@ from .iscsi_target import (
     filter_images,
     collect_target_images,
     collect_target_tpgts,
-    build_snapshot,
-    compare_snapshots,
-    load_backup_snapshot,
-    snapshot_deleted_rows,
-    get_saveconfig,
-    summarize_requested_node,
+    build_target_node_summary,
     collect_summaries_concurrently,
     list_config_versions,
     build_backup_config_summary,
@@ -50,7 +45,9 @@ from .formatter import (
     format_mount_status_output,
     format_error_summary,
     format_target_summary,
-    format_report,
+    format_initiator_summary,
+    format_target_metrics,
+    format_initiator_metrics,
     emit_output,
 )
 
@@ -226,159 +223,26 @@ def cmd_get_images(args) -> None:
 
 
 def cmd_get_metrics(args) -> None:
-    node_results: List[dict] = []
-    errors: Dict[str, str] = {}
-    metrics_rows: List[List[str]] = []
-    deleted_by_node: Dict[str, List[dict]] = {}
-    comparison_summary: Dict[str, Dict[str, int]] = {}
-    comparison_sources: Dict[str, str] = {}
-    initiator_stats: Dict[str, Dict] = {}
-
     if args.name:
-        summary, error = summarize_requested_node(args.name, True)
-        if error:
-            raise SystemExit(error)
+        node_name = args.name
+        labels, label_error = get_node_labels(node_name)
+        role = detect_node_role(labels) if labels else "unknown"
+        if label_error and role == "unknown":
+            return {
+                "node": node_name,
+                "role": "unknown",
+                "errors": [label_error],
+            }, label_error
+        if role == "initiator":
+            summary = build_initiator_node_summary(node_name)
+            emit_output(summary, formatter=format_initiator_metrics)
+            return
+        if role == "target":
+            summary = build_target_node_summary(node_name, with_metrics=True)
+            emit_output(summary, formatter=format_target_metrics)
 
-        node_results.append(summary)
-        current_errors = summary.get("errors", [])
-        if current_errors:
-            errors[summary["node"]] = "; ".join(current_errors)
-
-        if summary.get("role") == "target":
-            for image in summary.get("images", []):
-                metrics_rows.append(
-                    [
-                        summary["node"],
-                        image["iqn"],
-                        image["tpgt_name"],
-                        image["lun_name"],
-                        image["image_name"],
-                        str(image["read_mbytes"]),
-                        str(image["read_iops"]),
-                    ]
-                )
-            current_config, current_error = get_saveconfig(summary["node"])
-            if current_error:
-                errors[summary["node"]] = current_error
-            else:
-                backup_config, backup_error, backup_source = load_backup_snapshot(
-                    summary["node"], args.compare_config
-                )
-                if backup_error:
-                    errors[f"{summary['node']}:backup"] = backup_error
-                elif backup_config is not None:
-                    current_snapshot = build_snapshot(current_config)
-                    previous_snapshot = build_snapshot(backup_config)
-                    delta = compare_snapshots(current_snapshot, previous_snapshot)
-                    deleted_by_node[summary["node"]] = snapshot_deleted_rows(delta)
-                    comparison_summary[summary["node"]] = {
-                        "iqns_added": len(delta["iqns_added"]),
-                        "iqns_removed": len(delta["iqns_removed"]),
-                        "tpgs_added": len(delta["tpgs_added"]),
-                        "tpgs_removed": len(delta["tpgs_removed"]),
-                        "luns_added": len(delta["luns_added"]),
-                        "luns_removed": len(delta["luns_removed"]),
-                        "acls_added": len(delta["acls_added"]),
-                        "acls_removed": len(delta["acls_removed"]),
-                        "storage_objects_added": len(delta["storage_objects_added"]),
-                        "storage_objects_removed": len(
-                            delta["storage_objects_removed"]
-                        ),
-                        "rootfs_deleted": len(delta["rootfs_deleted"]),
-                        "pe_deleted": len(delta["pe_deleted"]),
-                    }
-                    if backup_source:
-                        comparison_sources[summary["node"]] = backup_source
-        else:
-            initiator_stats[summary["node"]] = {
-                "total": summary.get("total", 0),
-                "mounted": summary.get("mounted", 0),
-                "unmounted": summary.get("unmounted", 0),
-                "sessions": summary.get("sessions", 0),
-            }
     else:
-        target_nodes, error = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
-        if error:
-            raise SystemExit(error)
-
-        for summary in collect_summaries_concurrently(target_nodes, True):
-            if summary["errors"]:
-                errors[summary["node"]] = "; ".join(summary["errors"])
-            node_results.append(summary)
-            for image in summary.get("images", []):
-                metrics_rows.append(
-                    [
-                        summary["node"],
-                        image["iqn"],
-                        image["tpgt_name"],
-                        image["lun_name"],
-                        image["image_name"],
-                        str(image["read_mbytes"]),
-                        str(image["read_iops"]),
-                    ]
-                )
-
-            current_config, current_error = get_saveconfig(summary["node"])
-            if current_error:
-                errors[summary["node"]] = current_error
-            else:
-                backup_config, backup_error, backup_source = load_backup_snapshot(
-                    summary["node"], args.compare_config
-                )
-                if backup_error:
-                    errors[f"{summary['node']}:backup"] = backup_error
-                elif backup_config is not None:
-                    current_snapshot = build_snapshot(current_config)
-                    previous_snapshot = build_snapshot(backup_config)
-                    delta = compare_snapshots(current_snapshot, previous_snapshot)
-                    deleted_by_node[summary["node"]] = snapshot_deleted_rows(delta)
-                    comparison_summary[summary["node"]] = {
-                        "iqns_added": len(delta["iqns_added"]),
-                        "iqns_removed": len(delta["iqns_removed"]),
-                        "tpgs_added": len(delta["tpgs_added"]),
-                        "tpgs_removed": len(delta["tpgs_removed"]),
-                        "luns_added": len(delta["luns_added"]),
-                        "luns_removed": len(delta["luns_removed"]),
-                        "acls_added": len(delta["acls_added"]),
-                        "acls_removed": len(delta["acls_removed"]),
-                        "storage_objects_added": len(delta["storage_objects_added"]),
-                        "storage_objects_removed": len(
-                            delta["storage_objects_removed"]
-                        ),
-                        "rootfs_deleted": len(delta["rootfs_deleted"]),
-                        "pe_deleted": len(delta["pe_deleted"]),
-                    }
-                    if backup_source:
-                        comparison_sources[summary["node"]] = backup_source
-
-        initiator_nodes, initiator_error = get_kubernetes_nodes(args.initiator_selector)
-        if initiator_error:
-            errors["initiator_cluster"] = initiator_error
-
-        for summary in collect_initiator_summaries_concurrently(initiator_nodes):
-            initiator_node = summary["node"]
-            initiator_stats[initiator_node] = {
-                "total": summary["total"],
-                "mounted": summary["mounted"],
-                "unmounted": summary["unmounted"],
-                "sessions": summary["sessions"],
-            }
-            if summary["errors"]:
-                errors[initiator_node] = "; ".join(summary["errors"])
-
-    report = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "nodes": [
-            item["node"] for item in node_results if item.get("role") == "target"
-        ],
-        "metrics_rows": metrics_rows,
-        "deleted_by_node": deleted_by_node,
-        "comparison_summary": comparison_summary,
-        "comparison_sources": comparison_sources,
-        "errors": errors,
-        "initiator_stats": initiator_stats,
-    }
-    emit_output(report, formatter=format_report)
+        raise SystemExit(f"Provide a node name with --name flag")
 
 
 def cmd_get_sessions(args) -> None:
@@ -465,23 +329,25 @@ def cmd_get_errors(args) -> None:
 
 # describe commands
 def cmd_describe_node(args) -> None:
-    with_metrics = True if args.metrics else False
     if args.name:
-        summary, error = summarize_requested_node(args.name, with_metrics)
-        print(summary)
-        if error:
-            raise SystemExit(error)
-        emit_output(summary, formatter=format_target_summary)
-        return
-
-    label = args.label or DEFAULT_TARGET_SELECTOR
-    nodes, error = get_kubernetes_nodes(label)
-    if error:
-        raise SystemExit(error)
-    emit_output(
-        {"label": label, "nodes": nodes, "count": len(nodes)},
-        formatter=format_nodes_output,
-    )
+        node_name = args.name
+        labels, label_error = get_node_labels(node_name)
+        role = detect_node_role(labels) if labels else "unknown"
+        if label_error and role == "unknown":
+            return {
+                "node": node_name,
+                "role": "unknown",
+                "errors": [label_error],
+            }, label_error
+        if role == "initiator":
+            summary = build_initiator_node_summary(node_name)
+            emit_output(summary, formatter=format_initiator_summary)
+            return
+        if role == "target":
+            summary = build_target_node_summary(node_name, with_metrics=False)
+            emit_output(summary, formatter=format_target_summary)
+    else:
+        raise SystemExit(f"Provide the node name with --name flag")
 
 
 def cmd_describe_config(args) -> None:

@@ -555,12 +555,19 @@ def load_backup_snapshot(
     return backup_config, backup_error, backup_path
 
 
-def build_target_node_summary(node: str, with_metrics: bool = False) -> dict:
+def build_target_node_summary(
+    node: str,
+    with_metrics: bool = False,
+    compare_config: str | None = None,
+) -> dict:
     images, tpgts, errors = collect_target_images(node, with_metrics)
+
     by_type = count_by_type(images)
+
     diagnostics, diagnostic_errors = collect_node_diagnostics(node)
     errors.extend(diagnostic_errors)
-    return {
+
+    summary = {
         "node": node,
         "role": "target",
         "iqns": sorted({image.iqn for image in images}),
@@ -577,7 +584,57 @@ def build_target_node_summary(node: str, with_metrics: bool = False) -> dict:
         "diagnostics": [asdict(diagnostic) for diagnostic in diagnostics],
         "errors": errors,
         "with_metrics": with_metrics,
+        "deleted_images": [],
+        "comparison_summary": {},
+        "comparison_source": None,
     }
+
+    current_config, current_error = get_saveconfig(node)
+
+    if current_error:
+        summary["errors"].append(current_error)
+        return summary
+
+    backup_config, backup_error, backup_source = load_backup_snapshot(
+        node,
+        compare_config,
+    )
+
+    if backup_error:
+        summary["errors"].append(backup_error)
+        return summary
+
+    if backup_config is None:
+        return summary
+
+    current_snapshot = build_snapshot(current_config)
+    previous_snapshot = build_snapshot(backup_config)
+
+    delta = compare_snapshots(
+        current_snapshot,
+        previous_snapshot,
+    )
+
+    summary["deleted_images"] = snapshot_deleted_rows(delta)
+
+    summary["comparison_summary"] = {
+        "iqns_added": len(delta["iqns_added"]),
+        "iqns_removed": len(delta["iqns_removed"]),
+        "tpgs_added": len(delta["tpgs_added"]),
+        "tpgs_removed": len(delta["tpgs_removed"]),
+        "luns_added": len(delta["luns_added"]),
+        "luns_removed": len(delta["luns_removed"]),
+        "acls_added": len(delta["acls_added"]),
+        "acls_removed": len(delta["acls_removed"]),
+        "storage_objects_added": len(delta["storage_objects_added"]),
+        "storage_objects_removed": len(delta["storage_objects_removed"]),
+        "rootfs_deleted": len(delta["rootfs_deleted"]),
+        "pe_deleted": len(delta["pe_deleted"]),
+    }
+
+    summary["comparison_source"] = backup_source
+
+    return summary
 
 
 def collect_summaries_concurrently(
@@ -596,32 +653,6 @@ def collect_summaries_concurrently(
     order = {node: index for index, node in enumerate(nodes)}
     results.sort(key=lambda item: order.get(item.get("node", ""), 0))
     return results
-
-
-def summarize_requested_node(
-    node_name: str, with_metrics: bool = False
-) -> Tuple[dict, Optional[str]]:
-    labels, label_error = get_node_labels(node_name)
-    role = detect_node_role(labels) if labels else "unknown"
-    if label_error and role == "unknown":
-        return {
-            "node": node_name,
-            "role": "unknown",
-            "errors": [label_error],
-        }, label_error
-    if role == "initiator":
-        return build_initiator_node_summary(node_name), None
-    if role == "target":
-        return build_target_node_summary(node_name, with_metrics), None
-
-    target_summary = build_target_node_summary(node_name, with_metrics)
-    if target_summary["errors"]:
-        return target_summary, None
-    initiator_summary = build_initiator_node_summary(node_name)
-    if initiator_summary["errors"]:
-        return initiator_summary, None
-    target_summary["role"] = "unknown"
-    return target_summary, None
 
 
 def build_backup_config_summary(

@@ -90,12 +90,7 @@ def build_parser() -> argparse.ArgumentParser:
     metrics_parser = get_subparsers.add_parser("metrics", help="Show iSCSI metrics")
     metrics_parser.add_argument("--name", default=None, help="Target node to inspect")
     metrics_parser.add_argument(
-        "--initiator-selector",
-        default=DEFAULT_INITIATOR_SELECTOR,
-        help="Kubernetes label selector for initiator nodes",
-    )
-    metrics_parser.add_argument(
-        "--compare-config",
+        "--config-file",
         default=None,
         help="Backup config file path to compare against; defaults to the latest backup version",
     )
