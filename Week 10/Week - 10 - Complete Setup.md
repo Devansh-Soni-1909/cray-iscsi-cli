@@ -46,7 +46,7 @@ To configure a new ubuntu VM as iscsi-target with above architecture, run the fo
    #!/bin/bash
    set -e
 
-   BASE_DIR="/var/lib/iscsi_disks"
+   BASE_DIR="/var/lib/cps-local/boot_images"
    PORTAL_IP="0.0.0.0"
    PORTAL_PORT="3260"
 
@@ -60,7 +60,7 @@ To configure a new ubuntu VM as iscsi-target with above architecture, run the fo
    mkdir -p ${BASE_DIR}
 
    echo "[+] Cleaning old disk images"
-   rm -f ${BASE_DIR}/*.img
+   rm -f ${BASE_DIR}/*
 
    echo "[+] Resetting existing target configuration"
    targetcli clearconfig confirm=True || true
@@ -69,8 +69,8 @@ To configure a new ubuntu VM as iscsi-target with above architecture, run the fo
 
    for i in $(seq -w 1 2); do
       targetcli /backstores/fileio create \
-         rootfs_disk${i} \
-         ${BASE_DIR}/rootfs_disk${i}.img \
+         image${i}_rootfs \
+         ${BASE_DIR}/image${i}_rootfs \
          50M
    done
 
@@ -78,8 +78,8 @@ To configure a new ubuntu VM as iscsi-target with above architecture, run the fo
 
    for i in $(seq -w 1 8); do
       targetcli /backstores/fileio create \
-         pe_disk${i} \
-         ${BASE_DIR}/pe_disk${i}.img \
+         image${i}_pe \
+         ${BASE_DIR}/image${i}_pe.img \
          50M
    done
 
@@ -100,14 +100,14 @@ To configure a new ubuntu VM as iscsi-target with above architecture, run the fo
 
    for i in $(seq -w 1 2); do
       targetcli /iscsi/${TARGET_IQN}/tpg1/luns create \
-         /backstores/fileio/rootfs_disk${i}
+         /backstores/fileio/image${i}_rootfs
    done
 
    echo "[+] Mapping PE disks as LUNs"
 
    for i in $(seq -w 1 8); do
       targetcli /iscsi/${TARGET_IQN}/tpg1/luns create \
-         /backstores/fileio/pe_disk${i}
+         /backstores/fileio/image${i}_pe
    done
 
    echo "[+] Saving configuration"
