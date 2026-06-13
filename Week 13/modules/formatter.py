@@ -19,8 +19,14 @@ def render_table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> str:
     return "\n".join(lines)
 
 
-def emit_output(payload: dict, formatter=None) -> None:
-    print(formatter(payload) if formatter else str(payload))
+DEFAULT_OUT_FILE = "iscsi-output.txt"
+
+def emit_output(payload: dict, formatter=None, out_file: str = None) -> None:
+    text = formatter(payload) if formatter else str(payload)
+    print(text)
+    path = out_file or DEFAULT_OUT_FILE
+    with open(path, "a") as f:
+        f.write(text + "\n")
 
 
 def format_nodes_output(payload: dict) -> str:
@@ -324,33 +330,18 @@ def format_sessions_output(payload: dict) -> str:
 
 
 def _format_mount_status_table(mounts: List[dict]) -> str:
-    headers = ["Image Name", "Status"]
+    headers = ["Device", "Mount Point", "Status"]
     rows = [
-        [entry.get("image_name") or entry.get("device", "-"), entry["status"]]
+        [
+            entry.get("device", "-"),
+            entry.get("mount_point") or "-",
+            entry["status"],
+        ]
         for entry in mounts
     ]
     if not rows:
         return "No iSCSI devices found."
-
-    widths = [len(header) for header in headers]
-    for row in rows:
-        for index, value in enumerate(row):
-            widths[index] = max(widths[index], len(str(value)))
-
-    lines = [
-        "".join(
-            str(headers[index]).ljust(widths[index] + 2)
-            for index in range(len(headers))
-        ).rstrip(),
-        "-" * (sum(widths) + 2 * (len(headers) - 1)),
-    ]
-    for row in rows:
-        lines.append(
-            "".join(
-                str(row[index]).ljust(widths[index] + 2) for index in range(len(row))
-            ).rstrip()
-        )
-    return "\n".join(lines)
+    return render_table(headers, rows)
 
 
 def _format_initiator_mount_status_summary(summary: dict) -> str:
