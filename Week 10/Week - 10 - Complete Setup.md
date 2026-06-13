@@ -24,10 +24,10 @@ Setup:
   ```
   Target
   └── TPG1
-     ├── lun0 -> rootfs_disk01
-     ├── lun1 -> rootfs_disk02
+     ├── lun0 -> image1_rootfs
+     ├── lun1 -> image2_rootfs
      ├── ...
-     ├── lun9 -> pe_disk08
+     ├── lun9 -> image10_pe
      └── ACLs
            └── initiator IQN
   ```
