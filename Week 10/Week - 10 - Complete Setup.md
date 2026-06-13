@@ -18,8 +18,8 @@ Setup:
 
 10 Fileio Backstore Images + LUNs ( Size = 50MB )
 
-- 2 Rootfs Images (eg: rootfs_disk01.img)
-- 8 PE Images (eg: pe_disk01.img)
+- 2 Rootfs Images (eg: image1_rootfs)
+- 8 PE Images (eg: image2_pe)
 
   ```
   Target
@@ -46,7 +46,7 @@ To configure a new ubuntu VM as iscsi-target with above architecture, run the fo
    #!/bin/bash
    set -e
 
-   BASE_DIR="/var/lib/cps-local/boot_images"
+   BASE_DIR="/var/lib/cps-local/boot-images"
    PORTAL_IP="0.0.0.0"
    PORTAL_PORT="3260"
 
@@ -67,7 +67,7 @@ To configure a new ubuntu VM as iscsi-target with above architecture, run the fo
 
    echo "[+] Creating rootfs disks (2)"
 
-   for i in $(seq -w 1 2); do
+   for i in $(seq 1 2); do
       targetcli /backstores/fileio create \
          image${i}_rootfs \
          ${BASE_DIR}/image${i}_rootfs \
@@ -79,7 +79,7 @@ To configure a new ubuntu VM as iscsi-target with above architecture, run the fo
    for i in $(seq -w 1 8); do
       targetcli /backstores/fileio create \
          image${i}_pe \
-         ${BASE_DIR}/image${i}_pe.img \
+         ${BASE_DIR}/image${i}_pe \
          50M
    done
 
