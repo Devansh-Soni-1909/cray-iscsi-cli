@@ -143,11 +143,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--name", default=None, help="Initiator node to inspect"
     )
     sessions_parser.add_argument(
-        "--label",
-        default=DEFAULT_INITIATOR_SELECTOR,
-        help="Kubernetes label selector for initiator nodes",
-    )
-    sessions_parser.add_argument(
         "--out-file",
         default=None,
         help="Save output to file (default: iscsi-output.txt)",
@@ -163,11 +158,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--name", default=None, help="Initiator node to inspect"
     )
     mount_status_parser.add_argument(
-        "--label",
-        default=DEFAULT_INITIATOR_SELECTOR,
-        help="Kubernetes label selector for initiator nodes",
-    )
-    mount_status_parser.add_argument(
         "--out-file",
         default=None,
         help="Save output to file (default: iscsi-output.txt)",
@@ -180,11 +170,6 @@ def build_parser() -> argparse.ArgumentParser:
         "errors", help="Scan recent logs for storage and network errors"
     )
     errors_parser.add_argument("--name", default=None, help="Node to inspect")
-    errors_parser.add_argument(
-        "--label",
-        default=DEFAULT_TARGET_SELECTOR,
-        help="Kubernetes label selector for target nodes",
-    )
     errors_parser.add_argument(
         "--lines",
         type=int,
@@ -230,11 +215,6 @@ def build_parser() -> argparse.ArgumentParser:
         "node", help="Show a detailed iSCSI summary for one node"
     )
     node_parser.add_argument("--name", default=None, help="Node name to inspect")
-    node_parser.add_argument(
-        "--label",
-        default=DEFAULT_TARGET_SELECTOR,
-        help="Kubernetes label selector for iSCSI nodes when listing",
-    )
     node_parser.add_argument(
         "--metrics", action="store_true", default=False, help="Include LUN metrics"
     )
