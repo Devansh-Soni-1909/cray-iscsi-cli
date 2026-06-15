@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import os
-from typing import Dict, List, Tuple, Sequence
+from typing import List, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .utils import run_pdsh_lines, run_pdsh_text
 from .error_collector import collect_node_diagnostics
+from .schemas import InitiatorConfigurationError
 
 
 def _parse_lsblk_iscsi_lines(output: str) -> List[dict]:
@@ -45,35 +46,39 @@ def _parse_lsblk_iscsi_lines(output: str) -> List[dict]:
     return mounts
 
 
-def collect_initiator_metrics(node: str) -> Tuple[Dict[str, int], List[str]]:
-    errors: List[str] = []
-    output, error = run_pdsh_text(
-        f'pdsh -w {node} "lsblk -o MOUNTPOINT,TRAN --noheadings | grep iscsi || true"'
-    )
-    if error:
-        errors.append(f"{node}: unable to collect initiator metrics: {error}")
-        return {"total": 0, "mounted": 0, "unmounted": 0, "sessions": 0}, errors
+def collect_initiator_metrics(node: str) -> dict:
+    try:
+        output = run_pdsh_text(
+            f'pdsh -w {node} "lsblk -o MOUNTPOINT,TRAN --noheadings | grep iscsi || true"'
+        )
+    except Exception as error:
+        raise InitiatorConfigurationError(
+            node, f"Unable to collect initiator metrics: {error}"
+        )
 
     lines = [line for line in output.splitlines() if line.strip()]
     total = len(lines)
     mounted = sum(1 for line in lines if line.strip().startswith("/"))
     unmounted = total - mounted
 
-    session_lines, sessions_error = run_pdsh_lines(
-        f'pdsh -w {node} "sudo iscsiadm -m session 2>/dev/null || true"'
-    )
-    if sessions_error:
-        errors.append(f"{node}: unable to collect sessions: {sessions_error}")
-        session_lines = []
+    try:
+        session_lines = run_pdsh_lines(
+            f'pdsh -w {node} "sudo iscsiadm -m session 2>/dev/null || true"'
+        )
+    except Exception as sessions_error:
+        raise InitiatorConfigurationError(
+            node, f"Unable to collect active sessions: {sessions_error}"
+        )
 
     sessions = len([line for line in session_lines if line.strip()])
 
-    session_details_output, session_details_error = run_pdsh_text(
-        f'pdsh -w {node} "sudo iscsiadm -m session -P 3 2>/dev/null || true"'
-    )
-    if session_details_error:
-        errors.append(
-            f"{node}: unable to collect session details: {session_details_error}"
+    try:
+        session_details_output = run_pdsh_text(
+            f'pdsh -w {node} "sudo iscsiadm -m session -P 3 2>/dev/null || true"'
+        )
+    except Exception as session_details_error:
+        raise InitiatorConfigurationError(
+            node, f"Unable to collect session details: {session_details_error}"
         )
 
     session_details = [
@@ -87,24 +92,36 @@ def collect_initiator_metrics(node: str) -> Tuple[Dict[str, int], List[str]]:
         "sessions": sessions,
         "session_lines": [line for line in session_lines if line.strip()],
         "session_details": session_details,
-    }, errors
+    }
 
 
-def collect_initiator_mount_entries(node: str) -> Tuple[List[dict], List[str]]:
-    errors: List[str] = []
-    output, error = run_pdsh_text(
-        f'pdsh -w {node} "lsblk -o NAME,LABEL,MOUNTPOINT,TRAN --noheadings 2>/dev/null | grep iscsi || true"'
-    )
-    if error:
-        errors.append(f"{node}: unable to collect mount status: {error}")
-        return [], errors
-    return _parse_lsblk_iscsi_lines(output), errors
+def collect_initiator_mount_entries(node: str) -> List[dict]:
+    try:
+        output = run_pdsh_text(
+            f'pdsh -w {node} "lsblk -o NAME,LABEL,MOUNTPOINT,TRAN --noheadings 2>/dev/null | grep iscsi || true"'
+        )
+        return _parse_lsblk_iscsi_lines(output)
+    except Exception as error:
+        raise InitiatorConfigurationError(
+            node, f"Unable to collect mount status: {error}"
+        )
 
 
 def build_initiator_node_summary(node: str) -> dict:
-    stats, metric_errors = collect_initiator_metrics(node)
-    diagnostics, diagnostic_errors = collect_node_diagnostics(node)
-    errors = metric_errors + diagnostic_errors
+    errors: List[str] = []
+    stats = {}
+    try:
+        stats = collect_initiator_metrics(node)
+    except Exception as exc:
+        errors.append(str(exc))
+
+    diagnostics = []
+    try:
+        diagnostics, diagnostic_errors = collect_node_diagnostics(node)
+        errors.extend(diagnostic_errors)
+    except Exception as exc:
+        errors.append(str(exc))
+
     return {
         "node": node,
         "role": "initiator",
@@ -120,7 +137,13 @@ def build_initiator_node_summary(node: str) -> dict:
 
 
 def build_initiator_mount_status(node: str) -> dict:
-    mounts, mount_errors = collect_initiator_mount_entries(node)
+    errors: List[str] = []
+    mounts = []
+    try:
+        mounts = collect_initiator_mount_entries(node)
+    except Exception as exc:
+        errors.append(str(exc))
+
     mounted = sum(1 for entry in mounts if entry["status"] == "mounted")
     unmounted = sum(1 for entry in mounts if entry["status"] == "unmounted")
     return {
@@ -129,7 +152,7 @@ def build_initiator_mount_status(node: str) -> dict:
         "mounted": mounted,
         "unmounted": unmounted,
         "mounts": mounts,
-        "errors": mount_errors,
+        "errors": errors,
     }
 
 

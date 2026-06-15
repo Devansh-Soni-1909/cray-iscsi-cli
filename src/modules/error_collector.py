@@ -1,6 +1,5 @@
 from __future__ import annotations
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from typing import List, Optional, Tuple
 from .schemas import NodeErrorReport
@@ -35,13 +34,16 @@ def collect_recent_logs(node: str, lines: int = 200) -> Tuple[str, Optional[str]
         f"tail -n {lines} /var/log/syslog 2>/dev/null",
         f"dmesg | tail -n {lines}",
     ]
+    last_error = None
     for command in commands:
-        output, error = run_pdsh_text(f'pdsh -w {node} "{command}"')
-        if output:
-            return output, None
-        if error:
+        try:
+            output = run_pdsh_text(f'pdsh -w {node} "{command}"')
+            if output:
+                return output, None
+        except Exception as error:
+            last_error = str(error)
             continue
-    return "", f"{node}: unable to collect logs"
+    return "", f"Unable to collect logs: {last_error or 'no output from commands'}"
 
 
 def collect_service_errors(
@@ -65,14 +67,11 @@ def collect_service_errors(
             f"-n {lines} "
             "--no-pager"
         )
-
-        output, error = run_pdsh_text(f'pdsh -w {node} "{command}"')
-
-        if error:
-            errors.append(f"{node}: unable to collect errors for {service}: {error}")
-            continue
-
-        service_logs[service] = output
+        try:
+            output = run_pdsh_text(f'pdsh -w {node} "{command}"')
+            service_logs[service] = output
+        except Exception as error:
+            errors.append(f"Unable to collect errors for {service}: {error}")
 
     return service_logs, errors
 
@@ -93,14 +92,17 @@ def collect_recent_logs_for_nodes(
     for command in commands:
         if not remaining:
             break
-        outputs, _ = run_pdsh_text_by_node(sorted(remaining), command)
-        for node, output in outputs.items():
-            if output:
-                logs_by_node[node] = output
-                remaining.discard(node)
+        try:
+            outputs, _ = run_pdsh_text_by_node(sorted(remaining), command)
+            for node, output in outputs.items():
+                if output:
+                    logs_by_node[node] = output
+                    remaining.discard(node)
+        except Exception:
+            continue
 
     errors_by_node = {
-        node: f"{node}: unable to collect logs" for node in sorted(remaining)
+        node: f"Unable to collect logs for node {node}" for node in sorted(remaining)
     }
     return logs_by_node, errors_by_node
 

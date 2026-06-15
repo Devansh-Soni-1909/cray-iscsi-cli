@@ -1,8 +1,10 @@
 import json
-from typing import Tuple, List, Optional, Dict
-from .utils import run_command
-from pathlib import Path
 import yaml
+from typing import List, Dict
+from pathlib import Path
+
+from .schemas import KubernetesError
+from .utils import run_command
 
 DEFAULT_TARGET_SELECTOR_VALUE = "iscsi-role=target"
 DEFAULT_INITIATOR_SELECTOR_VALUE = "iscsi-role=initiator"
@@ -15,52 +17,52 @@ INITIATOR_SELECTOR_KEY = "initiator-selector"
 def _load_config() -> dict:
     if not CLI_CONFIG_PATH.exists():
         return {}
-    with CLI_CONFIG_PATH.open("r", encoding="utf-8") as handle:
-        data = yaml.safe_load(handle)
-    return data if isinstance(data, dict) else {}
+    try:
+        with CLI_CONFIG_PATH.open("r", encoding="utf-8") as handle:
+            data = yaml.safe_load(handle)
+        return data if isinstance(data, dict) else {}
+    except Exception as exc:
+        raise KubernetesError(f"Failed to read config file '{CLI_CONFIG_PATH}': {exc}")
 
 
 def _save_config(config: dict) -> None:
-    CLI_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with CLI_CONFIG_PATH.open("w", encoding="utf-8") as handle:
-        yaml.safe_dump(config, handle, sort_keys=False)
-
-
-def _get_config_value(key: str, default: str) -> Tuple[str, str | None]:
     try:
-        config = _load_config()
-        return config.get(key, default), None
+        CLI_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with CLI_CONFIG_PATH.open("w", encoding="utf-8") as handle:
+            yaml.safe_dump(config, handle, sort_keys=False)
     except Exception as exc:
-        return default, str(exc)
+        raise KubernetesError(f"Failed to write config file '{CLI_CONFIG_PATH}': {exc}")
 
 
-def _set_config_value(key: str, value: str) -> Tuple[str, str | None]:
-    try:
-        config = _load_config()
-        config[key] = value
-        _save_config(config)
-        return value, None
-    except Exception as exc:
-        return "", str(exc)
+def _get_config_value(key: str, default: str) -> str:
+    config = _load_config()
+    return config.get(key, default)
 
 
-def get_target_node_label() -> Tuple[str, str | None]:
+def _set_config_value(key: str, value: str) -> str:
+    config = _load_config()
+    config[key] = value
+    _save_config(config)
+    return value
+
+
+def get_target_node_label() -> str:
     return _get_config_value(TARGET_SELECTOR_KEY, DEFAULT_TARGET_SELECTOR_VALUE)
 
 
-def set_target_node_label(label: str) -> Tuple[str, str | None]:
+def set_target_node_label(label: str) -> str:
     return _set_config_value(TARGET_SELECTOR_KEY, label)
 
 
-def get_initiator_node_label() -> Tuple[str, str | None]:
+def get_initiator_node_label() -> str:
     return _get_config_value(INITIATOR_SELECTOR_KEY, DEFAULT_INITIATOR_SELECTOR_VALUE)
 
 
-def set_initator_node_label(label: str) -> Tuple[str, str | None]:
+def set_initator_node_label(label: str) -> str:
     return _set_config_value(INITIATOR_SELECTOR_KEY, label)
 
 
-def run_kubectl_json(command: str) -> Tuple[dict, Optional[str]]:
+def run_kubectl_json(command: str) -> dict:
     result = run_command(command)
     if result.returncode != 0:
         message = (
@@ -68,16 +70,16 @@ def run_kubectl_json(command: str) -> Tuple[dict, Optional[str]]:
             or result.stdout.strip()
             or f"exit {result.returncode}"
         )
-        return {}, message
+        raise KubernetesError(f"kubectl command '{command}' failed: {message}")
     try:
-        return json.loads(result.stdout), None
+        return json.loads(result.stdout)
     except json.JSONDecodeError as exc:
-        return {}, f"invalid JSON output: {exc}"
+        raise KubernetesError(f"Invalid JSON from kubectl command '{command}': {exc}")
 
 
 def get_kubernetes_nodes(
     node_selector: str, full_info: bool = False
-) -> Tuple[List[str] | Dict[str, Dict], Optional[str]]:
+) -> List[str] | Dict[str, Dict]:
     if full_info:
         command = f"kubectl get nodes -l {node_selector}  -o json"
         result = run_command(command)
@@ -87,7 +89,9 @@ def get_kubernetes_nodes(
                 or result.stdout.strip()
                 or f"exit {result.returncode}"
             )
-            return {}, message
+            raise KubernetesError(
+                f"Failed to retrieve nodes with selector '{node_selector}': {message}"
+            )
         try:
             data = json.loads(result.stdout)
             nodes_data = {}
@@ -118,9 +122,11 @@ def get_kubernetes_nodes(
                         else "NotReady"
                     ),
                 }
-            return nodes_data, None
+            return nodes_data
         except json.JSONDecodeError as exc:
-            return [], f"invalid JSON output: {exc}"
+            raise KubernetesError(
+                f"Failed to parse JSON for nodes with selector '{node_selector}': {exc}"
+            )
     else:
         command = (
             "kubectl get nodes "
@@ -134,23 +140,23 @@ def get_kubernetes_nodes(
                 or result.stdout.strip()
                 or f"exit {result.returncode}"
             )
-            return [], message
+            raise KubernetesError(
+                f"Failed to list nodes with selector '{node_selector}': {message}"
+            )
         output = result.stdout.replace("'", "").strip()
-        return [node for node in output.split() if node], None
+        return [node for node in output.split() if node]
 
 
-def get_kubernetes_node_json(node_name: str) -> Tuple[dict, Optional[str]]:
+def get_kubernetes_node_json(node_name: str) -> dict:
     return run_kubectl_json(f"kubectl get node {node_name} -o json")
 
 
-def get_node_labels(node_name: str) -> Tuple[Dict[str, str], Optional[str]]:
-    payload, error = get_kubernetes_node_json(node_name)
-    if error:
-        return {}, error
+def get_node_labels(node_name: str) -> Dict[str, str]:
+    payload = get_kubernetes_node_json(node_name)
     labels = payload.get("metadata", {}).get("labels", {})
     if not isinstance(labels, dict):
-        return {}, f"{node_name}: labels were not a mapping"
-    return labels, None
+        raise KubernetesError(f"Labels for node '{node_name}' are not a mapping")
+    return labels
 
 
 def detect_node_role(labels: Dict[str, str]) -> str:

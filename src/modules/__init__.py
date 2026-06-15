@@ -18,3 +18,12 @@ from .commands import (
     cmd_describe_node,
     cmd_describe_config,
 )
+from .schemas import (
+    ISCSIException,
+    CLIParameterError,
+    KubernetesError,
+    RemoteCommandError,
+    TargetConfigurationError,
+    InitiatorConfigurationError,
+    MetricsCollectionError,
+)

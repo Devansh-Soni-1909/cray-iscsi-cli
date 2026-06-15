@@ -51,13 +51,20 @@ from .formatter import (
     emit_output,
 )
 
-DEFAULT_TARGET_SELECTOR, error = get_target_node_label()
-if error:
-    raise SystemExit("Error getting target node label")
+from .schemas import (
+    CLIParameterError,
+    TargetConfigurationError,
+)
 
-DEFAULT_INITIATOR_SELECTOR, error = get_initiator_node_label()
-if error:
-    raise SystemExit("Error getting initiator node label")
+try:
+    DEFAULT_TARGET_SELECTOR = get_target_node_label()
+except Exception:
+    DEFAULT_TARGET_SELECTOR = "iscsi-role=target"
+
+try:
+    DEFAULT_INITIATOR_SELECTOR = get_initiator_node_label()
+except Exception:
+    DEFAULT_INITIATOR_SELECTOR = "iscsi-role=initiator"
 
 
 # get commands
@@ -66,13 +73,11 @@ if error:
 def cmd_get_nodes(args) -> None:
     label = None
     if (args.target and args.initiator) or (not args.target and not args.initiator):
-        target_nodes, error = get_kubernetes_nodes(
-            DEFAULT_TARGET_SELECTOR, full_info=True
-        )
+        target_nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR, full_info=True)
         for node in target_nodes.keys():
             target_nodes[node]["role"] = "target"
 
-        initiator_nodes, error = get_kubernetes_nodes(
+        initiator_nodes = get_kubernetes_nodes(
             DEFAULT_INITIATOR_SELECTOR, full_info=True
         )
         for node in initiator_nodes.keys():
@@ -82,16 +87,15 @@ def cmd_get_nodes(args) -> None:
         nodes = target_nodes | initiator_nodes
     elif args.target:
         label = DEFAULT_TARGET_SELECTOR
-        nodes, error = get_kubernetes_nodes(label, full_info=True)
+        nodes = get_kubernetes_nodes(label, full_info=True)
         for node in nodes.keys():
             nodes[node]["role"] = "target"
     elif args.initiator:
         label = DEFAULT_INITIATOR_SELECTOR
-        nodes, error = get_kubernetes_nodes(label, full_info=True)
+        nodes = get_kubernetes_nodes(label, full_info=True)
         for node in nodes.keys():
             nodes[node]["role"] = "initiator"
-    if error:
-        raise SystemExit(error)
+
     emit_output(
         {"label": label, "nodes": nodes},
         formatter=format_nodes_output,
@@ -101,41 +105,35 @@ def cmd_get_nodes(args) -> None:
 
 def cmd_get_configs(args) -> None:
     if args.name:
-        labels, error = get_node_labels(args.name)
-        if error:
-            raise SystemExit(error)
+        labels = get_node_labels(args.name)
         role = detect_node_role(labels=labels)
         if role != "target":
-            raise SystemExit(
-                f"{args.name}: role is '{role},  this command is only valid for target nodes"
+            raise CLIParameterError(
+                f"{args.name}: role is '{role}', this command is only valid for target nodes"
             )
-        current, versions, error = list_config_versions(args.name)
-        if error:
-            raise SystemExit(
-                f"Error fetching configuration files from {args.name}: {error}"
-            )
+        current, versions = list_config_versions(args.name)
         emit_output(
             {"node": args.name, "current_config": current, "versions": versions},
             formatter=format_configs_output,
             out_file=args.out_file,
         )
     else:
-        raise SystemExit(f"Please provide the node name with the flag --name")
+        raise CLIParameterError("Please provide the node name with the flag --name")
 
 
 def cmd_get_luns(args) -> None:
     with_metrics = True if args.metrics else False
     if args.name:
-        labels, label_error = get_node_labels(args.name)
+        labels = get_node_labels(args.name)
         role = detect_node_role(labels)
         if role != "target":
-            raise SystemExit(
+            raise CLIParameterError(
                 f"{args.name}: role is '{role}', this command is only valid for target nodes"
             )
         images, _, errors = collect_target_images(args.name, with_metrics)
         images = filter_images(images, args.image_type)
-        if errors or label_error:
-            raise SystemExit("; ".join(errors + ([label_error] if label_error else [])))
+        if errors:
+            raise TargetConfigurationError(args.name, "; ".join(errors))
         payload = {
             "node": args.name,
             "role": role,
@@ -145,9 +143,7 @@ def cmd_get_luns(args) -> None:
             "with_metrics": with_metrics,
         }
     else:
-        nodes, error = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
-        if error:
-            raise SystemExit(error)
+        nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
         summaries = collect_summaries_concurrently(nodes, with_metrics)
         if args.image_type != "all":
             for summary in summaries:
@@ -163,20 +159,18 @@ def cmd_get_luns(args) -> None:
 def cmd_get_tpgts(args) -> None:
     with_metrics = False
     if args.name:
-        labels, label_error = get_node_labels(args.name)
+        labels = get_node_labels(args.name)
         role = detect_node_role(labels)
         if role != "target":
-            raise SystemExit(
+            raise CLIParameterError(
                 f"{args.name}: role is '{role}', this command is only valid for target nodes"
             )
         tpgts, errors = collect_target_tpgts(args.name, with_metrics)
-        if errors or label_error:
-            raise SystemExit("; ".join(errors + ([label_error] if label_error else [])))
+        if errors:
+            raise TargetConfigurationError(args.name, "; ".join(errors))
         payload = {"node": args.name, "role": role, "tpgts": tpgts, "count": len(tpgts)}
     else:
-        nodes, error = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
-        if error:
-            raise SystemExit(error)
+        nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
         payload = {"nodes": collect_summaries_concurrently(nodes, with_metrics)}
     emit_output(payload, formatter=format_tpgts_output, out_file=args.out_file)
 
@@ -184,10 +178,10 @@ def cmd_get_tpgts(args) -> None:
 def cmd_get_images(args) -> None:
     with_metrics = True if args.metrics else False
     if args.name:
-        labels, label_error = get_node_labels(args.name)
+        labels = get_node_labels(args.name)
         role = detect_node_role(labels)
         if role != "target":
-            raise SystemExit(
+            raise CLIParameterError(
                 f"{args.name}: role is '{role}', this command is only valid for target nodes"
             )
         images, tpgts, errors = collect_target_images(args.name, with_metrics)
@@ -206,8 +200,8 @@ def cmd_get_images(args) -> None:
                     filtered_tpgt["luns"] = filtered_luns
                     filtered_tpgt["lun_count"] = len(filtered_luns)
                     filtered_tpgts.append(filtered_tpgt)
-        if errors or label_error:
-            raise SystemExit("; ".join(errors + ([label_error] if label_error else [])))
+        if errors:
+            raise TargetConfigurationError(args.name, "; ".join(errors))
         payload = {
             "node": args.name,
             "role": role,
@@ -218,9 +212,7 @@ def cmd_get_images(args) -> None:
             "with_metrics": with_metrics,
         }
     else:
-        nodes, error = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
-        if error:
-            raise SystemExit(error)
+        nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
         summaries = collect_summaries_concurrently(nodes, with_metrics)
         if args.image_type != "all":
             for summary in summaries:
@@ -236,62 +228,48 @@ def cmd_get_images(args) -> None:
 def cmd_get_metrics(args) -> None:
     if args.name:
         node_name = args.name
-        labels, label_error = get_node_labels(node_name)
-        role = detect_node_role(labels) if labels else "unknown"
-        if label_error and role == "unknown":
-            return {
-                "node": node_name,
-                "role": "unknown",
-                "errors": [label_error],
-            }, label_error
+        labels = get_node_labels(node_name)
+        role = detect_node_role(labels)
         if role == "initiator":
             summary = build_initiator_node_summary(node_name)
             emit_output(summary, formatter=format_initiator_metrics)
-            return
-        if role == "target":
+        elif role == "target":
             summary = build_target_node_summary(node_name, with_metrics=True)
             emit_output(
                 summary, formatter=format_target_metrics, out_file=args.out_file
             )
-
+        else:
+            raise CLIParameterError(f"{node_name}: unknown role, cannot fetch metrics")
     else:
-        raise SystemExit(f"Provide a node name with --name flag")
+        raise CLIParameterError("Provide a node name with --name flag")
 
 
 def cmd_get_sessions(args) -> None:
     if args.name:
-        labels, label_error = get_node_labels(args.name)
-        if label_error:
-            raise SystemExit("Error getting sessions: " + label_error)
-        role = detect_node_role(labels) if labels else "unknown"
+        labels = get_node_labels(args.name)
+        role = detect_node_role(labels)
         if role != "initiator":
-            raise SystemExit(
+            raise CLIParameterError(
                 f"{args.name}: role is '{role}', this command is only valid for initiator nodes"
             )
         payload = build_initiator_node_summary(args.name)
     else:
-        nodes, error = get_kubernetes_nodes(DEFAULT_INITIATOR_SELECTOR)
-        if error:
-            raise SystemExit(error)
+        nodes = get_kubernetes_nodes(DEFAULT_INITIATOR_SELECTOR)
         payload = {"nodes": collect_initiator_summaries_concurrently(nodes)}
     emit_output(payload, formatter=format_sessions_output, out_file=args.out_file)
 
 
 def cmd_get_mount_status(args) -> None:
     if args.name:
-        labels, label_error = get_node_labels(args.name)
-        if label_error:
-            raise SystemExit("Error getting mount-status: " + label_error)
-        role = detect_node_role(labels) if labels else "unknown"
+        labels = get_node_labels(args.name)
+        role = detect_node_role(labels)
         if role != "initiator":
-            raise SystemExit(
+            raise CLIParameterError(
                 f"{args.name}: role is '{role}', this command is only valid for initiator nodes"
             )
         payload = build_initiator_mount_status(args.name)
     else:
-        nodes, error = get_kubernetes_nodes(DEFAULT_INITIATOR_SELECTOR)
-        if error:
-            raise SystemExit(error)
+        nodes = get_kubernetes_nodes(DEFAULT_INITIATOR_SELECTOR)
         payload = {"nodes": collect_initiator_mount_status_concurrently(nodes)}
     emit_output(payload, formatter=format_mount_status_output, out_file=args.out_file)
 
@@ -300,18 +278,12 @@ def cmd_get_errors(args) -> None:
     if args.name:
         payload = collect_error_summary(args.name, args.lines)
     else:
-        target_nodes, terror = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
-        if terror:
-            raise SystemExit(terror)
-
-        initiator_nodes, ierror = get_kubernetes_nodes(DEFAULT_INITIATOR_SELECTOR)
-        if ierror:
-            raise SystemExit(terror)
-
-        nodes = target_nodes.extend(initiator_nodes)
+        target_nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
+        initiator_nodes = get_kubernetes_nodes(DEFAULT_INITIATOR_SELECTOR)
+        nodes = target_nodes + initiator_nodes
         logs_by_node, errors_by_node = collect_recent_logs_for_nodes(nodes, args.lines)
         payload = {
-            "label": args.label,
+            "label": f"{DEFAULT_INITIATOR_SELECTOR, DEFAULT_TARGET_SELECTOR}",
             "lines": args.lines,
             "nodes": [],
         }
@@ -348,13 +320,11 @@ def cmd_get_errors(args) -> None:
 # set commands
 def cmd_set_label(args) -> None:
     if args.target:
-        label = args.target
-        set_target_node_label(label)
+        set_target_node_label(args.target)
     if args.initiator:
-        label = args.initiator
-        set_initator_node_label(label)
+        set_initator_node_label(args.initiator)
     if not args.target and not args.initiator:
-        raise SystemExit("Provide target/initiator labels")
+        raise CLIParameterError("Provide target/initiator labels")
     print(f"Config saved at {CLI_CONFIG_PATH}")
 
 
@@ -362,27 +332,22 @@ def cmd_set_label(args) -> None:
 def cmd_describe_node(args) -> None:
     if args.name:
         node_name = args.name
-        labels, label_error = get_node_labels(node_name)
-        role = detect_node_role(labels) if labels else "unknown"
-        if label_error and role == "unknown":
-            return {
-                "node": node_name,
-                "role": "unknown",
-                "errors": [label_error],
-            }, label_error
+        labels = get_node_labels(node_name)
+        role = detect_node_role(labels)
         if role == "initiator":
             summary = build_initiator_node_summary(node_name)
             emit_output(
                 summary, formatter=format_initiator_summary, out_file=args.out_file
             )
-            return
-        if role == "target":
+        elif role == "target":
             summary = build_target_node_summary(node_name, with_metrics=False)
             emit_output(
                 summary, formatter=format_target_summary, out_file=args.out_file
             )
+        else:
+            raise CLIParameterError(f"{node_name}: unknown role, cannot describe")
     else:
-        raise SystemExit(f"Provide the node name with --name flag")
+        raise CLIParameterError("Provide the node name with --name flag")
 
 
 def cmd_describe_config(args) -> None:
@@ -390,15 +355,15 @@ def cmd_describe_config(args) -> None:
         if args.file_path:
             payload, error = build_backup_config_summary(args.node, args.file_path)
             if error:
-                raise SystemExit(
-                    f"Error describing config {args.file_path} in {args.node}: {error}"
+                raise TargetConfigurationError(
+                    args.node, f"Error describing config {args.file_path}: {error}"
                 )
             emit_output(
                 payload, formatter=format_target_summary, out_file=args.out_file
             )
         else:
-            raise SystemExit(
-                "Please provide configuraiton file path with --file-path flag"
+            raise CLIParameterError(
+                "Please provide configuration file path with --file-path flag"
             )
     else:
-        raise SystemExit("Please provide a node name with --node flag")
+        raise CLIParameterError("Please provide a node name with --node flag")

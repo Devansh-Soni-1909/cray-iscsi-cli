@@ -17,6 +17,7 @@ from modules import (
     cmd_set_label,
     cmd_describe_node,
     cmd_describe_config,
+    ISCSIException,
 )
 
 DEFAULT_TARGET_SELECTOR = None
@@ -246,17 +247,21 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    DEFAULT_TARGET_SELECTOR, terror = get_target_node_label()
-    if terror:
-        raise SystemExit(f"Error getting target node label: {terror}")
-    DEFAULT_INITIATOR_SELECTOR, ierror = get_initiator_node_label()
-    if ierror:
-        raise SystemExit(f"Error getting initiator node label: {ierror}")
+    try:
+        global DEFAULT_TARGET_SELECTOR, DEFAULT_INITIATOR_SELECTOR
+        DEFAULT_TARGET_SELECTOR = get_target_node_label()
+        DEFAULT_INITIATOR_SELECTOR = get_initiator_node_label()
 
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    args.func(args)
-    return 0
+        parser = build_parser()
+        args = parser.parse_args(argv)
+        args.func(args)
+        return 0
+    except ISCSIException as exc:
+        print(f"Error: {exc}")
+        return 1
+    except Exception as exc:
+        print(f"Unexpected Error: {exc}")
+        return 1
 
 
 if __name__ == "__main__":

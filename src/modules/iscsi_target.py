@@ -13,6 +13,7 @@ from dataclasses import asdict
 from .schemas import LunImage, TpgtInfo
 from .utils import run_pdsh_text, run_pdsh_lines, parse_metric_value
 from .error_collector import collect_node_diagnostics
+from .schemas import TargetConfigurationError, MetricsCollectionError
 
 SAVECONFIG_PATHS = [
     "/etc/rtslib-fb-target/saveconfig.json",
@@ -25,49 +26,50 @@ TARGET_METRICS_BASE_PATH = "/sys/kernel/config/target/iscsi"
 _saveconfig_cache: Dict[str, Tuple[Optional[dict], Optional[str]]] = {}
 
 
-def get_saveconfig(node: str) -> Tuple[Optional[dict], Optional[str]]:
+def get_saveconfig(node: str) -> dict:
     if node in _saveconfig_cache:
         cached_data, cached_error = _saveconfig_cache[node]
-        return cached_data, cached_error
+        if cached_error:
+            raise TargetConfigurationError(node, cached_error)
+        return cached_data
 
     last_error = None
     for path in SAVECONFIG_PATHS:
         cmd = f'pdsh -w {node} "sudo cat {path} 2>/dev/null"'
-        output, error = run_pdsh_text(cmd)
-        if error:
-            last_error = error
-            continue
-        if not output.strip():
-            last_error = f"Empty file or file not found at {path}"
-            continue
         try:
+            output = run_pdsh_text(cmd)
+            if not output.strip():
+                last_error = f"Empty file or file not found at {path}"
+                continue
             data = json.loads(output)
             _saveconfig_cache[node] = (data, None)
-            return data, None
+            return data
         except Exception as e:
-            last_error = f"Failed to parse JSON from {path}: {e}"
+            last_error = f"Failed to load target configuration from {path}: {e}"
             continue
 
-    err_msg = f"{node}: unable to load saveconfig.json: {last_error}"
+    err_msg = f"Unable to load saveconfig.json: {last_error}"
     _saveconfig_cache[node] = (None, err_msg)
-    return None, err_msg
+    raise TargetConfigurationError(node, err_msg)
 
 
 def list_config_versions(
     node: str,
-) -> Tuple[str | None, List[Tuple[str, str]], str | None]:
+) -> Tuple[str | None, List[Tuple[str, str]]]:
     last_error = None
     current_config = None
 
     # Find current config
     for config_path in SAVECONFIG_PATHS:
         cmd = f'pdsh -w {node} "sudo test -f {config_path} && sudo echo {config_path}"'
-
-        output, error = run_pdsh_lines(cmd)
-
-        if output:
-            current_config = output[0].strip()
-            break
+        try:
+            output = run_pdsh_lines(cmd)
+            if output:
+                current_config = output[0].strip()
+                break
+        except Exception as e:
+            last_error = str(e)
+            continue
 
     # Find backup configs
     for backup_path in BACKUP_PATHS:
@@ -75,131 +77,127 @@ def list_config_versions(
             f"pdsh -w {node} "
             f'"sudo find {backup_path} -maxdepth 1 -type f 2>/dev/null | sort"'
         )
+        try:
+            output = run_pdsh_lines(cmd)
+            if not output:
+                last_error = f"Empty directory or No directory found at {backup_path}"
+                continue
 
-        output, error = run_pdsh_lines(cmd)
-
-        if error:
-            last_error = error
-            continue
-
-        if not output:
-            last_error = f"Empty directory or No directory found at {backup_path}"
-            continue
-
-        versions: List[Tuple[str, str]] = []
-
-        for filepath in output:
-            filename = Path(filepath).name
-
-            match = re.search(
-                r"saveconfig-(\d{8})-(\d{2}:\d{2}:\d{2})",
-                filename,
-            )
-
-            if match:
-                dt = datetime.strptime(
-                    f"{match.group(1)} {match.group(2)}",
-                    "%Y%m%d %H:%M:%S",
+            versions: List[Tuple[str, str]] = []
+            for filepath in output:
+                filename = Path(filepath).name
+                match = re.search(
+                    r"saveconfig-(\d{8})-(\d{2}:\d{2}:\d{2})",
+                    filename,
                 )
-                timestamp = dt.strftime("%d %b %Y %I:%M:%S %p")
-            else:
-                timestamp = "Unknown"
+                if match:
+                    dt = datetime.strptime(
+                        f"{match.group(1)} {match.group(2)}",
+                        "%Y%m%d %H:%M:%S",
+                    )
+                    timestamp = dt.strftime("%d %b %Y %I:%M:%S %p")
+                else:
+                    timestamp = "Unknown"
+                versions.append((filepath, timestamp))
+            return current_config, versions
+        except Exception as e:
+            last_error = str(e)
+            continue
 
-            versions.append((filepath, timestamp))
-
-        return current_config, versions, None
-
-    return current_config, [], last_error
+    raise TargetConfigurationError(
+        node, f"Failed to list configuration versions: {last_error}"
+    )
 
 
-def read_backup_config_file(node: str, path: str):
+def read_backup_config_file(node: str, path: str) -> dict:
     remote_reader = (
         f"sudo gzip -dc {path}" if path.endswith(".gz") else f"sudo cat {path}"
     )
     cmd = f'pdsh -w {node} "{remote_reader}"'
-    output, error = run_pdsh_text(cmd)
-    if error:
-        return None, error
-    if not output.strip():
-        return None, f"Empty file or file not found at {path}"
     try:
-        data = json.loads(output)
-        return data, None
+        output = run_pdsh_text(cmd)
+        if not output.strip():
+            raise TargetConfigurationError(
+                node, f"Empty file or file not found at {path}"
+            )
+        return json.loads(output)
     except Exception as e:
-        return None, f"Failed to parse JSON from {path}: {e}"
+        raise TargetConfigurationError(node, f"Failed to parse JSON from {path}: {e}")
 
 
 def list_iqns(node: str) -> Tuple[List[str], List[str]]:
-    data, error = get_saveconfig(node)
-    if error:
-        return [], [error]
-    iqns = []
-    for target in data.get("targets", []):
-        if target.get("fabric") == "iscsi" and "wwn" in target:
-            iqns.append(target["wwn"])
-    return iqns, []
+    try:
+        data = get_saveconfig(node)
+        iqns = []
+        for target in data.get("targets", []):
+            if target.get("fabric") == "iscsi" and "wwn" in target:
+                iqns.append(target["wwn"])
+        return iqns, []
+    except TargetConfigurationError as exc:
+        return [], [str(exc)]
 
 
 def list_tpgts(node: str, iqn: str) -> Tuple[List[TpgtInfo], List[str]]:
-    data, error = get_saveconfig(node)
-    if error:
-        return [], [error]
-    tpgts: List[TpgtInfo] = []
-    for target in data.get("targets", []):
-        if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
-            for tpg in target.get("tpgs", []):
-                if "tag" in tpg:
-                    tag = tpg["tag"]
-                    tpgts.append(TpgtInfo(tag=tag, tpgt_name=f"tpgt_{tag}"))
-    return tpgts, []
+    try:
+        data = get_saveconfig(node)
+        tpgts: List[TpgtInfo] = []
+        for target in data.get("targets", []):
+            if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
+                for tpg in target.get("tpgs", []):
+                    if "tag" in tpg:
+                        tag = tpg["tag"]
+                        tpgts.append(TpgtInfo(tag=tag, tpgt_name=f"tpgt_{tag}"))
+        return tpgts, []
+    except TargetConfigurationError as exc:
+        return [], [str(exc)]
 
 
 def list_acls(node: str, iqn: str, tpgt_tag: int) -> Tuple[List[str], List[str]]:
-    data, error = get_saveconfig(node)
-    if error:
-        return [], [error]
-
-    acls = []
-    for target in data.get("targets", []):
-        if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
-            for tpg in target.get("tpgs", []):
-                if int(tpg.get("tag")) == tpgt_tag:
-                    for acl in tpg.get("node_acls", []):
-                        if "node_wwn" in acl:
-                            acls.append(acl["node_wwn"])
-    return acls, []
+    try:
+        data = get_saveconfig(node)
+        acls = []
+        for target in data.get("targets", []):
+            if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
+                for tpg in target.get("tpgs", []):
+                    if int(tpg.get("tag")) == tpgt_tag:
+                        for acl in tpg.get("node_acls", []):
+                            if "node_wwn" in acl:
+                                acls.append(acl["node_wwn"])
+        return acls, []
+    except TargetConfigurationError as exc:
+        return [], [str(exc)]
 
 
 def list_luns(node: str, iqn: str, tpgt_tag: int) -> Tuple[List[str], List[str]]:
-    data, error = get_saveconfig(node)
-    if error:
-        return [], [error]
+    try:
+        data = get_saveconfig(node)
+        luns = []
+        for target in data.get("targets", []):
+            if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
+                for tpg in target.get("tpgs", []):
+                    if int(tpg.get("tag")) == tpgt_tag:
+                        for lun in tpg.get("luns", []):
+                            if "index" in lun:
+                                luns.append(f"lun_{lun['index']}")
+        return luns, []
+    except TargetConfigurationError as exc:
+        return [], [str(exc)]
 
-    luns = []
-    for target in data.get("targets", []):
-        if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
-            for tpg in target.get("tpgs", []):
-                if int(tpg.get("tag")) == tpgt_tag:
-                    for lun in tpg.get("luns", []):
-                        if "index" in lun:
-                            luns.append(f"lun_{lun['index']}")
-    return luns, []
 
-
-def get_image_udev_path(node: str, plugin: str, name: str) -> Tuple[str, List[str]]:
-    data, error = get_saveconfig(node)
-    if error:
-        return [], [error]
-
-    for object in data.get("storage_objects"):
-        if object.get("plugin") == plugin and object.get("name") == name:
-            path = object.get("dev")
-            if path:
-                return path, None
-    return (
-        None,
-        f"No storage object in the {node} matches the given plugin:{plugin} and name:{name}",
-    )
+def get_image_udev_path(node: str, plugin: str, name: str) -> Tuple[str, Optional[str]]:
+    try:
+        data = get_saveconfig(node)
+        for object in data.get("storage_objects"):
+            if object.get("plugin") == plugin and object.get("name") == name:
+                path = object.get("dev")
+                if path:
+                    return path, None
+        return (
+            None,
+            f"No storage object in node matching plugin '{plugin}' and name '{name}'",
+        )
+    except TargetConfigurationError as exc:
+        return None, str(exc)
 
 
 def infer_image_type(identity: str) -> str:
@@ -212,50 +210,49 @@ def infer_image_type(identity: str) -> str:
 
 
 def list_images(node: str, iqn: str, tpgt_tag: int) -> Tuple[List[LunImage], List[str]]:
-    data, error = get_saveconfig(node)
-    if error:
-        return [], [error]
-
-    images: List[LunImage] = []
-    for target in data.get("targets", []):
-        if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
-            for tpg in target.get("tpgs", []):
-                if int(tpg.get("tag")) == tpgt_tag:
-                    for lun in tpg.get("luns", []):
-                        if "index" in lun:
-                            parts = lun.get("storage_object").rstrip("/").split("/")
-                            if len(parts) >= 2:
-                                plugin = parts[-2]
-                                name = parts[-1]
-                                udev_path, error = get_image_udev_path(
-                                    node, plugin, name
-                                )
-                                if error:
-                                    return [], [error]
-                                image_name = udev_path.rstrip("").split("/")[-1]
-                                image_type = infer_image_type(udev_path)
-                                images.append(
-                                    LunImage(
-                                        node=node,
-                                        iqn=iqn,
-                                        tpgt_name=f"tpgt_{tpgt_tag}",
-                                        lun_id=lun.get("index"),
-                                        lun_name=name,
-                                        image_name=image_name,
-                                        image_type=image_type,
-                                        object_path=lun.get("storage_object"),
-                                        udev_path=udev_path,
-                                        read_mbytes=0,
-                                        read_iops=0,
+    try:
+        data = get_saveconfig(node)
+        images: List[LunImage] = []
+        for target in data.get("targets", []):
+            if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
+                for tpg in target.get("tpgs", []):
+                    if int(tpg.get("tag")) == tpgt_tag:
+                        for lun in tpg.get("luns", []):
+                            if "index" in lun:
+                                parts = lun.get("storage_object").rstrip("/").split("/")
+                                if len(parts) >= 2:
+                                    plugin = parts[-2]
+                                    name = parts[-1]
+                                    udev_path, error = get_image_udev_path(
+                                        node, plugin, name
                                     )
-                                )
-    return images, []
+                                    if error:
+                                        return [], [error]
+                                    image_name = udev_path.rstrip("").split("/")[-1]
+                                    image_type = infer_image_type(udev_path)
+                                    images.append(
+                                        LunImage(
+                                            node=node,
+                                            iqn=iqn,
+                                            tpgt_name=f"tpgt_{tpgt_tag}",
+                                            lun_id=lun.get("index"),
+                                            lun_name=name,
+                                            image_name=image_name,
+                                            image_type=image_type,
+                                            object_path=lun.get("storage_object"),
+                                            udev_path=udev_path,
+                                            read_mbytes=0,
+                                            read_iops=0,
+                                        )
+                                    )
+        return images, []
+    except TargetConfigurationError as exc:
+        return [], [str(exc)]
 
 
 def read_lun_stats(
     node: str, iqn: str, tpgt_tag: str, lun_index: str
-) -> Tuple[Dict[str, int], List[str]]:
-    errors: List[str] = []
+) -> Dict[str, int]:
     stats_path = f"{TARGET_METRICS_BASE_PATH}/{iqn}/tpgt_{tpgt_tag}/lun/lun_{lun_index}/statistics/scsi_tgt_port"
 
     remote_script = (
@@ -274,31 +271,34 @@ def read_lun_stats(
             metric_map[key.strip()] = value.strip()
         return metric_map.get("read_mbytes", ""), metric_map.get("read_iops", "")
 
-    output, read_error = run_pdsh_text(command)
-    read_mbytes_output, read_iops_output = _parse_metrics(output)
+    read_mbytes_output = ""
+    read_iops_output = ""
+    try:
+        output = run_pdsh_text(command)
+        read_mbytes_output, read_iops_output = _parse_metrics(output)
+    except Exception as read_error:
+        # Retry once
+        try:
+            output = run_pdsh_text(command)
+            read_mbytes_output, read_iops_output = _parse_metrics(output)
+        except Exception as retry_error:
+            raise MetricsCollectionError(
+                node, f"Failed to read metrics from {stats_path}: {retry_error}"
+            )
 
-    if not read_mbytes_output or not read_iops_output:
-        retry_output, retry_error = run_pdsh_text(command)
-        if retry_output:
-            retry_mbytes, retry_iops = _parse_metrics(retry_output)
-            if retry_mbytes:
-                read_mbytes_output = retry_mbytes
-            if retry_iops:
-                read_iops_output = retry_iops
-        if read_error is None:
-            read_error = retry_error
-
-    if read_error:
-        errors.append(f"{node}: unable to read {stats_path}: {read_error}")
     if read_mbytes_output == "":
-        errors.append(f"{node}: missing read_mbytes value under {stats_path}")
+        raise MetricsCollectionError(
+            node, f"Missing read_mbytes value under {stats_path}"
+        )
     if read_iops_output == "":
-        errors.append(f"{node}: missing read_iops value under {stats_path}")
+        raise MetricsCollectionError(
+            node, f"Missing read_iops value under {stats_path}"
+        )
 
     return {
         "read_mbytes": parse_metric_value(read_mbytes_output),
         "read_iops": parse_metric_value(read_iops_output),
-    }, errors
+    }
 
 
 def build_snapshot(config: dict) -> dict:
@@ -411,8 +411,12 @@ def collect_target_images(
     all_tpgts: List[dict] = []
     images: List[LunImage] = []
 
-    iqns, iqn_errors = list_iqns(node)
-    errors.extend(iqn_errors)
+    try:
+        iqns, iqn_errors = list_iqns(node)
+        errors.extend(iqn_errors)
+    except Exception as exc:
+        errors.append(str(exc))
+        return [], [], errors
 
     def _collect_tpgt(
         iqn: str, tpgt_tag: int
@@ -432,14 +436,14 @@ def collect_target_images(
             tpgt_errors.extend(image_errors)
             if with_metrics:
 
-                def fetch_lun_stats(lun: LunImage) -> Tuple[LunImage, dict, List[str]]:
-                    data, error = read_lun_stats(
+                def fetch_lun_stats(lun: LunImage) -> Tuple[LunImage, dict]:
+                    data = read_lun_stats(
                         node,
                         iqn,
                         tpgt_tag,
                         lun.lun_id,
                     )
-                    return lun, data, error
+                    return lun, data
 
                 with ThreadPoolExecutor(max_workers=10) as executor:
                     futures = [
@@ -447,15 +451,12 @@ def collect_target_images(
                     ]
                     for future in as_completed(futures):
                         try:
-                            lun, data, error = future.result()
+                            lun, data = future.result()
+                            if data:
+                                lun.read_mbytes = data.get("read_mbytes")
+                                lun.read_iops = data.get("read_iops")
                         except Exception as exc:
                             tpgt_errors.append(str(exc))
-                            continue
-                        if error:
-                            tpgt_errors.extend(error)
-                        if data:
-                            lun.read_mbytes = data.get("read_mbytes")
-                            lun.read_iops = data.get("read_iops")
 
         lun_results.sort(key=lambda item: (int(item.lun_id), item.lun_name))
         tpgt_images.extend(lun_results)
@@ -531,21 +532,23 @@ def load_backup_snapshot(
 
         last_error = None
         for candidate_path in candidate_paths:
-            backup_config, error = read_backup_config_file(node, candidate_path)
-            if backup_config is not None:
-                return backup_config, None, candidate_path
-            last_error = error
+            try:
+                backup_config = read_backup_config_file(node, candidate_path)
+                if backup_config is not None:
+                    return backup_config, None, candidate_path
+            except TargetConfigurationError as exc:
+                last_error = str(exc)
         return None, last_error, compare_config
 
-    _, versions, error = list_config_versions(node)
-    if error:
-        return None, error, None
-    if not versions:
-        return None, None, None
-
-    backup_path = versions[0][0]
-    backup_config, backup_error = read_backup_config_file(node, backup_path)
-    return backup_config, backup_error, backup_path
+    try:
+        current_config, versions = list_config_versions(node)
+        if not versions:
+            return None, None, None
+        backup_path = versions[0][0]
+        backup_config = read_backup_config_file(node, backup_path)
+        return backup_config, None, backup_path
+    except TargetConfigurationError as exc:
+        return None, str(exc), None
 
 
 def build_target_node_summary(
@@ -553,7 +556,14 @@ def build_target_node_summary(
     with_metrics: bool = False,
     compare_config: str | None = None,
 ) -> dict:
-    images, tpgts, errors = collect_target_images(node, with_metrics)
+    errors: List[str] = []
+    images = []
+    tpgts = []
+    try:
+        images, tpgts, collect_errors = collect_target_images(node, with_metrics)
+        errors.extend(collect_errors)
+    except Exception as exc:
+        errors.append(str(exc))
 
     by_type = count_by_type(images)
 
@@ -582,10 +592,10 @@ def build_target_node_summary(
         "comparison_source": None,
     }
 
-    current_config, current_error = get_saveconfig(node)
-
-    if current_error:
-        summary["errors"].append(current_error)
+    try:
+        current_config = get_saveconfig(node)
+    except TargetConfigurationError as current_error:
+        summary["errors"].append(str(current_error))
         return summary
 
     backup_config, backup_error, backup_source = load_backup_snapshot(
@@ -652,9 +662,10 @@ def build_backup_config_summary(
     node: str,
     file_path: str,
 ) -> Tuple[dict, str | None]:
-    config_data, error = read_backup_config_file(node, file_path)
-    if error:
-        return {}, error
+    try:
+        config_data = read_backup_config_file(node, file_path)
+    except TargetConfigurationError as exc:
+        return {}, str(exc)
 
     storage_objects = config_data.get("storage_objects", [])
     targets = config_data.get("targets", [])

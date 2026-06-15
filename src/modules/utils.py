@@ -4,6 +4,7 @@ import re
 import subprocess
 from typing import Dict, List, Optional, Sequence, Tuple
 
+from .schemas import RemoteCommandError
 
 def run_command(command: str) -> subprocess.CompletedProcess:
     return subprocess.run(command, shell=True, capture_output=True, text=True)
@@ -22,7 +23,7 @@ def _clean_pdsh_output(output: str) -> List[str]:
     return lines
 
 
-def run_pdsh_lines(command: str) -> Tuple[List[str], Optional[str]]:
+def run_pdsh_lines(command: str) -> List[str]:
     result = run_command(command)
     if result.returncode != 0:
         message = (
@@ -30,15 +31,16 @@ def run_pdsh_lines(command: str) -> Tuple[List[str], Optional[str]]:
             or result.stdout.strip()
             or f"exit {result.returncode}"
         )
-        return [], message
-    return _clean_pdsh_output(result.stdout), None
+        match = re.search(r'pdsh\s+-w\s+([^\s"]+)', command)
+        node = match.group(1) if match else None
+        raise RemoteCommandError(node=node, command=command, reason=message)
+    return _clean_pdsh_output(result.stdout)
 
 
-def run_pdsh_text(command: str) -> Tuple[str, Optional[str]]:
-    lines, error = run_pdsh_lines(command)
-    if error:
-        return "", error
-    return "\n".join(lines).strip(), None
+def run_pdsh_text(command: str) -> str:
+    lines = run_pdsh_lines(command)
+    return "\n".join(lines).strip()
+
 
 
 def _parse_pdsh_output_by_node(
