@@ -1,9 +1,0 @@
-FROM rockylinux:8
-
-RUN dnf install -y iscsi-initiator-utils targetcli procps iproute && \
-    dnf clean all
-
-COPY /scripts/iscsi-monitor-entrypoint.sh /collect.sh
-RUN chmod +x /collect.sh
-
-CMD ["/collect.sh"]

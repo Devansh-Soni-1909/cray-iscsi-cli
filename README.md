@@ -48,3 +48,12 @@ To develop a **robust CLI-based management utility** that:
 - Cluster-wide iSCSI target discovery
 - Automated iSCSI related data collection across nodes
 - Lightweight and scriptable CLI interface
+
+---
+
+## Documentation and References
+
+For detailed guides, please refer to the following documentation files:
+- [Setup Guide](file:///media/sasank-v/New%20Volume/Studies/College/Interships/HPE%20-%20CPP/group-learning-hub/Setup%20Guide.md) — Comprehensive guide to VM installation, DNS configuration, passwordless root SSH setup, `pdsh` setup, and Kubernetes node provisioning.
+- [CLI Reference](file:///media/sasank-v/New%20Volume/Studies/College/Interships/HPE%20-%20CPP/group-learning-hub/CLI_REFERENCE.md) — Complete reference for the `iscsi` command-line utility, including available subcommands, arguments, syntax, and output placeholders.
+
