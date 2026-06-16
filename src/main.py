@@ -31,7 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     get_parser = subparsers.add_parser("get", help="Read-only iSCSI commands")
     get_subparsers = get_parser.add_subparsers(dest="get_command", required=True)
 
-    # cmd: get node
+    # cmd: get nodes
     nodes_parser = get_subparsers.add_parser("nodes", help="List iSCSI target nodes")
     nodes_parser.add_argument(
         "--target",
