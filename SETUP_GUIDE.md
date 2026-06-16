@@ -511,7 +511,7 @@ After completing the configurations, switch to the master node `ncn-m001` and ve
 
 1. Navigate to the utility directory:
    ```bash
-   cd /path/to/group-learning-hub
+   cd /path/to/cray-iscsi-cli
    ```
 
 2. Test target node discovery:
@@ -536,7 +536,78 @@ After completing the configurations, switch to the master node `ncn-m001` and ve
 
 ---
 
-## 8. Operating Assumptions and Limitations
+## 8. Configure a CLI Alias
+
+To simplify command execution, create a wrapper script that exposes the utility as a system-wide command named `cray`.
+
+1. Create the executable wrapper:
+
+   ```bash
+   sudo nano /usr/local/bin/cray
+   ```
+
+2. Add the following content:
+
+   ```bash
+   #!/bin/bash
+   python3 /home/iscsi/python-cli/src/main.py "$@"
+   ```
+
+   > Replace `/home/iscsi/python-cli/src/main.py` with the actual path to the CLI entry point if it differs in your environment.
+
+3. Make the wrapper executable:
+
+   ```bash
+   sudo chmod +x /usr/local/bin/cray
+   ```
+
+4. Verify the command is available:
+
+   ```bash
+   which cray
+   ```
+
+   Expected output:
+
+   ```bash
+   /usr/local/bin/cray
+   ```
+
+5. Run the CLI using the new command:
+
+   ```bash
+   cray get nodes
+   ```
+
+   ```bash
+   cray get luns
+   ```
+
+   ```bash
+   cray get sessions
+   ```
+
+   ```bash
+   cray get metrics --name ncn-w001
+   ```
+
+This wrapper forwards all arguments directly to the Python CLI, allowing the utility to be invoked as a native command from any location on the system.
+
+One small correction: if your entry point is `src/main.py`, the wrapper should point to that file:
+
+```bash
+#!/bin/bash
+python3 /home/iscsi/python-cli/src/main.py "$@"
+````
+rather than:
+
+```bash
+python3 /home/iscsi/python-cli/main.py "$@"
+```
+unless `main.py` is actually located at the project root.
+
+
+## 9. Operating Assumptions and Limitations
 
 ### Assumptions
 - **Kubernetes Access**: The cluster APIs are reachable, and target/initiator nodes are labeled appropriately inside the K8s cluster.
