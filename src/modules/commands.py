@@ -419,7 +419,6 @@ def cmd_describe_config(args) -> None:
             current, versions = list_config_versions(args.node)
             version_paths = [version[0] for version in versions]
             version_paths.append(current)
-            print(version_paths)
             with ThreadPoolExecutor(max_workers=min(32, len(versions))) as executor:
                 results = list(
                     executor.map(

@@ -62,11 +62,11 @@ Lists all discovered target and initiator nodes based on the configured Kubernet
 
 #### Options
 
-| Flag          | Type   | Description                        | Default                   |
-| :------------ | :----- | :--------------------------------- | :------------------------ |
-| `--target`    | Flag   | Fetches iSCSI target nodes only    | `False`                   |
-| `--initiator` | Flag   | Fetches iSCSI initiator nodes only | `False`                   |
-| `--out-file`  | String | Save output to specified file path | `None` (writes to stdout) |
+| Flag          | Type   | Description                        | Default             |
+| :------------ | :----- | :--------------------------------- | :------------------ |
+| `--target`    | Flag   | Fetches iSCSI target nodes only    | `False`             |
+| `--initiator` | Flag   | Fetches iSCSI initiator nodes only | `False`             |
+| `--out-file`  | String | Save output to specified file path | `iscsi-output.text` |
 
 #### Command Combinations
 
@@ -138,7 +138,7 @@ iscsi get nodes --out-file iscsi-output.txt
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
 
 ##### iscsi get nodes --target --out-file <filename>
@@ -148,7 +148,7 @@ iscsi get nodes --target --out-file iscsi-output.txt
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
 
 ##### iscsi get nodes --initiator --out-file <filename>
@@ -158,7 +158,7 @@ iscsi get nodes --initiator --out-file iscsi-output.txt
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
 
 ##### iscsi get nodes --target --initiator --out-file <filename>
@@ -168,7 +168,7 @@ iscsi get nodes --target --initiator --out-file iscsi-output.txt
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
 
 ---
@@ -189,10 +189,10 @@ Lists the target configuration versions (from backups) available on the specifie
 
 #### Options
 
-| Flag         | Type   | Description                        | Default                   |
-| :----------- | :----- | :--------------------------------- | :------------------------ |
-| `--name`     | String | Target node name to inspect        | **Required**              |
-| `--out-file` | String | Save output to specified file path | `None` (writes to stdout) |
+| Flag         | Type   | Description                        | Default            |
+| :----------- | :----- | :--------------------------------- | :----------------- |
+| `--name`     | String | Target node name to inspect        | **Required**       |
+| `--out-file` | String | Save output to specified file path | `iscsi-output.txt` |
 
 #### Command Combinations
 
@@ -203,7 +203,34 @@ iscsi get configs
 ```
 
 ```text
-[Output Placeholder]
+Node: ncn-w001
+
+Current Configuration
+---------------------
+saveconfig.json (/etc/rtslib-fb-target/saveconfig.json)
+
+Backup Configurations
+---------------------
+DATE                    | FILE                                 | PATH
+------------------------+--------------------------------------+------------------------------------------------------------------
+16 Jun 2026 01:56:56 PM | saveconfig-20260616-13:56:56-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260616-13:56:56-json.gz
+16 Jun 2026 01:06:20 PM | saveconfig-20260616-13:06:20-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260616-13:06:20-json.gz
+15 Jun 2026 03:17:31 PM | saveconfig-20260615-15:17:31-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260615-15:17:31-json.gz
+12 Jun 2026 02:10:15 PM | saveconfig-20260612-14:10:15-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260612-14:10:15-json.gz
+
+Node: ncn-w002
+
+Current Configuration
+---------------------
+saveconfig.json (/etc/rtslib-fb-target/saveconfig.json)
+
+Backup Configurations
+---------------------
+DATE                    | FILE                                 | PATH
+------------------------+--------------------------------------+------------------------------------------------------------------
+16 Jun 2026 01:57:58 PM | saveconfig-20260616-13:57:58-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260616-13:57:58-json.gz
+12 Jun 2026 02:12:31 PM | saveconfig-20260612-14:12:31-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260612-14:12:31-json.gz
+
 ```
 
 ##### iscsi get configs --name \<target-node\>
@@ -235,7 +262,7 @@ iscsi get configs --name ncn-w001 --out-file iscsi-output.txt
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
 
 ---
@@ -261,7 +288,7 @@ Lists the configured Logical Unit Numbers (LUNs) across target nodes. Can filter
 | `--name`       | String  | Target node name to inspect                  | `None` (all target nodes) |
 | `--image-type` | Choices | Filter by image type (`all`, `pe`, `rootfs`) | `all`                     |
 | `--metrics`    | Flag    | Include metrics for each LUN                 | `False`                   |
-| `--out-file`   | String  | Save output to specified file path           | `None` (writes to stdout) |
+| `--out-file`   | String  | Save output to specified file path           | `iscsi-output.txt`        |
 
 #### Command Combinations
 
@@ -588,7 +615,7 @@ iscsi get luns --out-file iscsi-output.txt
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
 
 ##### iscsi get luns --name \<target-node\> --out-file \<filename\>
@@ -598,7 +625,7 @@ iscsi get luns --name ncn-w001 --out-file iscsi-output.txt
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
 
 ##### iscsi get luns --name \<target-node\> --image-type pe --metrics --out-file \<filename\>
@@ -608,7 +635,7 @@ iscsi get luns --name ncn-w001 --image-type pe --metrics --out-file iscsi-output
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
 
 ---
@@ -632,7 +659,7 @@ Displays Target Portal Groups (TPGTs) configured on target nodes.
 | Flag         | Type   | Description                        | Default                   |
 | :----------- | :----- | :--------------------------------- | :------------------------ |
 | `--name`     | String | Target node name to inspect        | `None` (all target nodes) |
-| `--out-file` | String | Save output to specified file path | `None` (writes to stdout) |
+| `--out-file` | String | Save output to specified file path | `iscsi-output.txt`        |
 
 #### Command Combinations
 
@@ -680,7 +707,7 @@ iscsi get tpgts --out-file iscsi-output.txt
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
 
 ##### iscsi get tpgts --name \<target-node\> --out-file \<filename\>
@@ -690,7 +717,7 @@ iscsi get tpgts --name ncn-w001 --out-file iscsi-output.txt
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
 
 ---
@@ -716,7 +743,7 @@ Lists projected RootFS and PE images attached to target nodes.
 | `--name`       | String  | Target node name to inspect                  | `None` (all target nodes) |
 | `--image-type` | Choices | Filter by image type (`all`, `pe`, `rootfs`) | `all`                     |
 | `--metrics`    | Flag    | Include metrics for each image               | `False`                   |
-| `--out-file`   | String  | Save output to specified file path           | `None` (writes to stdout) |
+| `--out-file`   | String  | Save output to specified file path           | `iscsi-output.txt`        |
 
 #### Command Combinations
 
@@ -730,34 +757,35 @@ iscsi get images
 Node: ncn-w001
 Role: target
 Images: 10
-Image Name    | LUN           | Type
---------------+---------------+-------
-image1_rootfs | image1_rootfs | rootfs
-image2_rootfs | image2_rootfs | rootfs
-image1_pe | image1_pe     | pe
-image2_pe | image2_pe     | pe
-image3_pe | image3_pe     | pe
-image4_pe | image4_pe     | pe
-image5_pe | image5_pe     | pe
-image6_pe | image6_pe     | pe
-image7_pe | image7_pe     | pe
-image8_pe | image8_pe     | pe
+Image Name    | Type   | udev_path
+--------------+--------+---------------------------------------------
+image8_pe     | pe     | /var/lib/cps-local/boot-images/image8_pe
+image7_pe     | pe     | /var/lib/cps-local/boot-images/image7_pe
+image6_pe     | pe     | /var/lib/cps-local/boot-images/image6_pe
+image5_pe     | pe     | /var/lib/cps-local/boot-images/image5_pe
+image4_pe     | pe     | /var/lib/cps-local/boot-images/image4_pe
+image3_pe     | pe     | /var/lib/cps-local/boot-images/image3_pe
+image2_pe     | pe     | /var/lib/cps-local/boot-images/image2_pe
+image1_pe     | pe     | /var/lib/cps-local/boot-images/image1_pe
+image2_rootfs | rootfs | /var/lib/cps-local/boot-images/image2_rootfs
+image1_rootfs | rootfs | /var/lib/cps-local/boot-images/image1_rootfs
 
 Node: ncn-w002
 Role: target
 Images: 10
-Image Name    | LUN           | Type
---------------+---------------+-------
-image1_rootfs | image1_rootfs | rootfs
-image2_rootfs | image2_rootfs | rootfs
-image1_pe | image1_pe     | pe
-image2_pe | image2_pe     | pe
-image3_pe | image3_pe     | pe
-image4_pe | image4_pe     | pe
-image5_pe | image5_pe     | pe
-image6_pe | image6_pe     | pe
-image7_pe | image7_pe     | pe
-image8_pe | image8_pe     | pe
+Image Name    | Type   | udev_path
+--------------+--------+---------------------------------------------
+image8_pe     | pe     | /var/lib/cps-local/boot-images/image8_pe
+image7_pe     | pe     | /var/lib/cps-local/boot-images/image7_pe
+image6_pe     | pe     | /var/lib/cps-local/boot-images/image6_pe
+image5_pe     | pe     | /var/lib/cps-local/boot-images/image5_pe
+image4_pe     | pe     | /var/lib/cps-local/boot-images/image4_pe
+image3_pe     | pe     | /var/lib/cps-local/boot-images/image3_pe
+image2_pe     | pe     | /var/lib/cps-local/boot-images/image2_pe
+image1_pe     | pe     | /var/lib/cps-local/boot-images/image1_pe
+image2_rootfs | rootfs | /var/lib/cps-local/boot-images/image2_rootfs
+image1_rootfs | rootfs | /var/lib/cps-local/boot-images/image1_rootfs
+
 ```
 
 ##### iscsi get images --name \<target-node\>
@@ -770,18 +798,19 @@ iscsi get images --name ncn-w001
 Node: ncn-w001
 Role: target
 Images: 10
-Image Name    | LUN           | Type
---------------+---------------+-------
-image1_rootfs | image1_rootfs | rootfs
-image2_rootfs | image2_rootfs | rootfs
-image1_pe | image1_pe     | pe
-image2_pe | image2_pe     | pe
-image3_pe | image3_pe     | pe
-image4_pe | image4_pe     | pe
-image5_pe | image5_pe     | pe
-image6_pe | image6_pe     | pe
-image7_pe | image7_pe     | pe
-image8_pe | image8_pe     | pe
+Image Name    | Type   | udev_path
+--------------+--------+---------------------------------------------
+image8_pe     | pe     | /var/lib/cps-local/boot-images/image8_pe
+image7_pe     | pe     | /var/lib/cps-local/boot-images/image7_pe
+image6_pe     | pe     | /var/lib/cps-local/boot-images/image6_pe
+image5_pe     | pe     | /var/lib/cps-local/boot-images/image5_pe
+image4_pe     | pe     | /var/lib/cps-local/boot-images/image4_pe
+image3_pe     | pe     | /var/lib/cps-local/boot-images/image3_pe
+image2_pe     | pe     | /var/lib/cps-local/boot-images/image2_pe
+image1_pe     | pe     | /var/lib/cps-local/boot-images/image1_pe
+image2_rootfs | rootfs | /var/lib/cps-local/boot-images/image2_rootfs
+image1_rootfs | rootfs | /var/lib/cps-local/boot-images/image1_rootfs
+
 ```
 
 ##### iscsi get images --image-type all
@@ -794,34 +823,34 @@ iscsi get images --image-type all
 Node: ncn-w001
 Role: target
 Images: 10
-Image Name    | LUN           | Type
---------------+---------------+-------
-image1_rootfs | image1_rootfs | rootfs
-image2_rootfs | image2_rootfs | rootfs
-image1_pe | image1_pe     | pe
-image2_pe | image2_pe     | pe
-image3_pe | image3_pe     | pe
-image4_pe | image4_pe     | pe
-image5_pe | image5_pe     | pe
-image6_pe | image6_pe     | pe
-image7_pe | image7_pe     | pe
-image8_pe | image8_pe     | pe
+Image Name    | Type   | udev_path
+--------------+--------+---------------------------------------------
+image8_pe     | pe     | /var/lib/cps-local/boot-images/image8_pe
+image7_pe     | pe     | /var/lib/cps-local/boot-images/image7_pe
+image6_pe     | pe     | /var/lib/cps-local/boot-images/image6_pe
+image5_pe     | pe     | /var/lib/cps-local/boot-images/image5_pe
+image4_pe     | pe     | /var/lib/cps-local/boot-images/image4_pe
+image3_pe     | pe     | /var/lib/cps-local/boot-images/image3_pe
+image2_pe     | pe     | /var/lib/cps-local/boot-images/image2_pe
+image1_pe     | pe     | /var/lib/cps-local/boot-images/image1_pe
+image2_rootfs | rootfs | /var/lib/cps-local/boot-images/image2_rootfs
+image1_rootfs | rootfs | /var/lib/cps-local/boot-images/image1_rootfs
 
 Node: ncn-w002
 Role: target
 Images: 10
-Image Name    | LUN           | Type
---------------+---------------+-------
-image1_rootfs | image1_rootfs | rootfs
-image2_rootfs | image2_rootfs | rootfs
-image1_pe | image1_pe     | pe
-image2_pe | image2_pe     | pe
-image3_pe | image3_pe     | pe
-image4_pe | image4_pe     | pe
-image5_pe | image5_pe     | pe
-image6_pe | image6_pe     | pe
-image7_pe | image7_pe     | pe
-image8_pe | image8_pe     | pe
+Image Name    | Type   | udev_path
+--------------+--------+---------------------------------------------
+image8_pe     | pe     | /var/lib/cps-local/boot-images/image8_pe
+image7_pe     | pe     | /var/lib/cps-local/boot-images/image7_pe
+image6_pe     | pe     | /var/lib/cps-local/boot-images/image6_pe
+image5_pe     | pe     | /var/lib/cps-local/boot-images/image5_pe
+image4_pe     | pe     | /var/lib/cps-local/boot-images/image4_pe
+image3_pe     | pe     | /var/lib/cps-local/boot-images/image3_pe
+image2_pe     | pe     | /var/lib/cps-local/boot-images/image2_pe
+image1_pe     | pe     | /var/lib/cps-local/boot-images/image1_pe
+image2_rootfs | rootfs | /var/lib/cps-local/boot-images/image2_rootfs
+image1_rootfs | rootfs | /var/lib/cps-local/boot-images/image1_rootfs
 
 ```
 
@@ -834,31 +863,34 @@ iscsi get images --image-type pe
 ```text
 Node: ncn-w001
 Role: target
+Filter: pe
 Images: 8
-Image Name    | LUN       | Type
---------------+-----------+-----
-image1_pe | image1_pe | pe
-image2_pe | image2_pe | pe
-image3_pe | image3_pe | pe
-image4_pe | image4_pe | pe
-image5_pe | image5_pe | pe
-image6_pe | image6_pe | pe
-image7_pe | image7_pe | pe
-image8_pe | image8_pe | pe
+Image Name | Type | udev_path
+-----------+------+-----------------------------------------
+image8_pe  | pe   | /var/lib/cps-local/boot-images/image8_pe
+image7_pe  | pe   | /var/lib/cps-local/boot-images/image7_pe
+image6_pe  | pe   | /var/lib/cps-local/boot-images/image6_pe
+image5_pe  | pe   | /var/lib/cps-local/boot-images/image5_pe
+image4_pe  | pe   | /var/lib/cps-local/boot-images/image4_pe
+image3_pe  | pe   | /var/lib/cps-local/boot-images/image3_pe
+image2_pe  | pe   | /var/lib/cps-local/boot-images/image2_pe
+image1_pe  | pe   | /var/lib/cps-local/boot-images/image1_pe
 
 Node: ncn-w002
 Role: target
+Filter: pe
 Images: 8
-Image Name    | LUN       | Type
---------------+-----------+-----
-image1_pe | image1_pe | pe
-image2_pe | image2_pe | pe
-image3_pe | image3_pe | pe
-image4_pe | image4_pe | pe
-image5_pe | image5_pe | pe
-image6_pe | image6_pe | pe
-image7_pe | image7_pe | pe
-image8_pe | image8_pe | pe
+Image Name | Type | udev_path
+-----------+------+-----------------------------------------
+image8_pe  | pe   | /var/lib/cps-local/boot-images/image8_pe
+image7_pe  | pe   | /var/lib/cps-local/boot-images/image7_pe
+image6_pe  | pe   | /var/lib/cps-local/boot-images/image6_pe
+image5_pe  | pe   | /var/lib/cps-local/boot-images/image5_pe
+image4_pe  | pe   | /var/lib/cps-local/boot-images/image4_pe
+image3_pe  | pe   | /var/lib/cps-local/boot-images/image3_pe
+image2_pe  | pe   | /var/lib/cps-local/boot-images/image2_pe
+image1_pe  | pe   | /var/lib/cps-local/boot-images/image1_pe
+
 ```
 
 ##### iscsi get images --image-type rootfs
@@ -870,19 +902,22 @@ iscsi get images --image-type rootfs
 ```text
 Node: ncn-w001
 Role: target
+Filter: rootfs
 Images: 2
-Image Name    | LUN           | Type
---------------+---------------+-------
-image1_rootfs | image1_rootfs | rootfs
-image2_rootfs | image2_rootfs | rootfs
+Image Name    | Type   | udev_path
+--------------+--------+---------------------------------------------
+image2_rootfs | rootfs | /var/lib/cps-local/boot-images/image2_rootfs
+image1_rootfs | rootfs | /var/lib/cps-local/boot-images/image1_rootfs
 
 Node: ncn-w002
 Role: target
+Filter: rootfs
 Images: 2
-Image Name    | LUN           | Type
---------------+---------------+-------
-image1_rootfs | image1_rootfs | rootfs
-image2_rootfs | image2_rootfs | rootfs
+Image Name    | Type   | udev_path
+--------------+--------+---------------------------------------------
+image2_rootfs | rootfs | /var/lib/cps-local/boot-images/image2_rootfs
+image1_rootfs | rootfs | /var/lib/cps-local/boot-images/image1_rootfs
+
 ```
 
 ##### iscsi get images --metrics
@@ -895,34 +930,35 @@ iscsi get images --metrics
 Node: ncn-w001
 Role: target
 Images: 10
-Image Name    | LUN           | Type   | Read MBytes | Read IOPs
---------------+---------------+--------+-------------+----------
-image1_rootfs | image1_rootfs | rootfs | 46          | 89
-image2_rootfs | image2_rootfs | rootfs | 0           | 116
-image1_pe | image1_pe     | pe     | 0           | 116
-image2_pe | image2_pe     | pe     | 0           | 116
-image3_pe | image3_pe     | pe     | 0           | 116
-image4_pe | image4_pe     | pe     | 0           | 116
-image5_pe | image5_pe     | pe     | 0           | 116
-image6_pe | image6_pe     | pe     | 0           | 116
-image7_pe | image7_pe     | pe     | 0           | 116
-image8_pe | image8_pe     | pe     | 0           | 116
+Image Name    | Type   | udev_path                                    | Read MBytes | Read IOPs
+--------------+--------+----------------------------------------------+-------------+----------
+image8_pe     | pe     | /var/lib/cps-local/boot-images/image8_pe     | 0           | 162
+image7_pe     | pe     | /var/lib/cps-local/boot-images/image7_pe     | 1           | 232
+image6_pe     | pe     | /var/lib/cps-local/boot-images/image6_pe     | 1           | 232
+image5_pe     | pe     | /var/lib/cps-local/boot-images/image5_pe     | 1           | 232
+image4_pe     | pe     | /var/lib/cps-local/boot-images/image4_pe     | 1           | 232
+image3_pe     | pe     | /var/lib/cps-local/boot-images/image3_pe     | 1           | 232
+image2_pe     | pe     | /var/lib/cps-local/boot-images/image2_pe     | 1           | 232
+image1_pe     | pe     | /var/lib/cps-local/boot-images/image1_pe     | 1           | 232
+image2_rootfs | rootfs | /var/lib/cps-local/boot-images/image2_rootfs | 1           | 232
+image1_rootfs | rootfs | /var/lib/cps-local/boot-images/image1_rootfs | 1           | 234
 
 Node: ncn-w002
 Role: target
 Images: 10
-Image Name    | LUN           | Type   | Read MBytes | Read IOPs
---------------+---------------+--------+-------------+----------
-image1_rootfs | image1_rootfs | rootfs | 0           | 0
-image2_rootfs | image2_rootfs | rootfs | 0           | 0
-image1_pe | image1_pe     | pe     | 0           | 0
-image2_pe | image2_pe     | pe     | 0           | 0
-image3_pe | image3_pe     | pe     | 0           | 0
-image4_pe | image4_pe     | pe     | 0           | 0
-image5_pe | image5_pe     | pe     | 0           | 0
-image6_pe | image6_pe     | pe     | 0           | 0
-image7_pe | image7_pe     | pe     | 0           | 0
-image8_pe | image8_pe     | pe     | 0           | 0
+Image Name    | Type   | udev_path                                    | Read MBytes | Read IOPs
+--------------+--------+----------------------------------------------+-------------+----------
+image8_pe     | pe     | /var/lib/cps-local/boot-images/image8_pe     | 0           | 162
+image7_pe     | pe     | /var/lib/cps-local/boot-images/image7_pe     | 1           | 232
+image6_pe     | pe     | /var/lib/cps-local/boot-images/image6_pe     | 1           | 232
+image5_pe     | pe     | /var/lib/cps-local/boot-images/image5_pe     | 1           | 232
+image4_pe     | pe     | /var/lib/cps-local/boot-images/image4_pe     | 1           | 232
+image3_pe     | pe     | /var/lib/cps-local/boot-images/image3_pe     | 1           | 232
+image2_pe     | pe     | /var/lib/cps-local/boot-images/image2_pe     | 1           | 232
+image1_pe     | pe     | /var/lib/cps-local/boot-images/image1_pe     | 1           | 232
+image2_rootfs | rootfs | /var/lib/cps-local/boot-images/image2_rootfs | 1           | 232
+image1_rootfs | rootfs | /var/lib/cps-local/boot-images/image1_rootfs | 1           | 234
+
 ```
 
 ##### iscsi get images --name \<target-node\> --image-type pe
@@ -936,16 +972,17 @@ Node: ncn-w001
 Role: target
 Filter: pe
 Images: 8
-Image Name    | LUN       | Type
---------------+-----------+-----
-image1_pe | image1_pe | pe
-image2_pe | image2_pe | pe
-image3_pe | image3_pe | pe
-image4_pe | image4_pe | pe
-image5_pe | image5_pe | pe
-image6_pe | image6_pe | pe
-image7_pe | image7_pe | pe
-image8_pe | image8_pe | pe
+Image Name | Type | udev_path
+-----------+------+-----------------------------------------
+image8_pe  | pe   | /var/lib/cps-local/boot-images/image8_pe
+image7_pe  | pe   | /var/lib/cps-local/boot-images/image7_pe
+image6_pe  | pe   | /var/lib/cps-local/boot-images/image6_pe
+image5_pe  | pe   | /var/lib/cps-local/boot-images/image5_pe
+image4_pe  | pe   | /var/lib/cps-local/boot-images/image4_pe
+image3_pe  | pe   | /var/lib/cps-local/boot-images/image3_pe
+image2_pe  | pe   | /var/lib/cps-local/boot-images/image2_pe
+image1_pe  | pe   | /var/lib/cps-local/boot-images/image1_pe
+
 
 ```
 
@@ -960,10 +997,11 @@ Node: ncn-w001
 Role: target
 Filter: rootfs
 Images: 2
-Image Name    | LUN           | Type
---------------+---------------+-------
-image1_rootfs | image1_rootfs | rootfs
-image2_rootfs | image2_rootfs | rootfs
+Image Name    | Type   | udev_path
+--------------+--------+---------------------------------------------
+image2_rootfs | rootfs | /var/lib/cps-local/boot-images/image2_rootfs
+image1_rootfs | rootfs | /var/lib/cps-local/boot-images/image1_rootfs
+
 
 ```
 
@@ -977,18 +1015,19 @@ iscsi get images --name ncn-w001 --metrics
 Node: ncn-w001
 Role: target
 Images: 10
-Image Name    | LUN           | Type   | Read MBytes | Read IOPs
---------------+---------------+--------+-------------+----------
-image1_rootfs | image1_rootfs | rootfs | 46          | 89
-image2_rootfs | image2_rootfs | rootfs | 0           | 116
-image1_pe | image1_pe     | pe     | 0           | 116
-image2_pe | image2_pe     | pe     | 0           | 116
-image3_pe | image3_pe     | pe     | 0           | 116
-image4_pe | image4_pe     | pe     | 0           | 116
-image5_pe | image5_pe     | pe     | 0           | 116
-image6_pe | image6_pe     | pe     | 0           | 116
-image7_pe | image7_pe     | pe     | 0           | 116
-image8_pe | image8_pe     | pe     | 0           | 116
+Image Name    | Type   | udev_path                                    | Read MBytes | Read IOPs
+--------------+--------+----------------------------------------------+-------------+----------
+image8_pe     | pe     | /var/lib/cps-local/boot-images/image8_pe     | 0           | 162
+image7_pe     | pe     | /var/lib/cps-local/boot-images/image7_pe     | 1           | 232
+image6_pe     | pe     | /var/lib/cps-local/boot-images/image6_pe     | 1           | 232
+image5_pe     | pe     | /var/lib/cps-local/boot-images/image5_pe     | 1           | 232
+image4_pe     | pe     | /var/lib/cps-local/boot-images/image4_pe     | 1           | 232
+image3_pe     | pe     | /var/lib/cps-local/boot-images/image3_pe     | 1           | 232
+image2_pe     | pe     | /var/lib/cps-local/boot-images/image2_pe     | 1           | 232
+image1_pe     | pe     | /var/lib/cps-local/boot-images/image1_pe     | 1           | 232
+image2_rootfs | rootfs | /var/lib/cps-local/boot-images/image2_rootfs | 1           | 232
+image1_rootfs | rootfs | /var/lib/cps-local/boot-images/image1_rootfs | 1           | 234
+
 ```
 
 ##### iscsi get images --name \<target-node\> --image-type pe --metrics
@@ -1002,16 +1041,17 @@ Node: ncn-w001
 Role: target
 Filter: pe
 Images: 8
-Image Name    | LUN       | Type | Read MBytes | Read IOPs
---------------+-----------+------+-------------+----------
-image1_pe | image1_pe | pe   | 0           | 116
-image2_pe | image2_pe | pe   | 0           | 116
-image3_pe | image3_pe | pe   | 0           | 116
-image4_pe | image4_pe | pe   | 0           | 116
-image5_pe | image5_pe | pe   | 0           | 116
-image6_pe | image6_pe | pe   | 0           | 116
-image7_pe | image7_pe | pe   | 0           | 116
-image8_pe | image8_pe | pe   | 0           | 116
+Image Name | Type | udev_path                                | Read MBytes | Read IOPs
+-----------+------+------------------------------------------+-------------+----------
+image8_pe  | pe   | /var/lib/cps-local/boot-images/image8_pe | 0           | 162
+image7_pe  | pe   | /var/lib/cps-local/boot-images/image7_pe | 1           | 232
+image6_pe  | pe   | /var/lib/cps-local/boot-images/image6_pe | 1           | 232
+image5_pe  | pe   | /var/lib/cps-local/boot-images/image5_pe | 1           | 232
+image4_pe  | pe   | /var/lib/cps-local/boot-images/image4_pe | 1           | 232
+image3_pe  | pe   | /var/lib/cps-local/boot-images/image3_pe | 1           | 232
+image2_pe  | pe   | /var/lib/cps-local/boot-images/image2_pe | 1           | 232
+image1_pe  | pe   | /var/lib/cps-local/boot-images/image1_pe | 1           | 232
+
 ```
 
 ##### iscsi get images --name \<target-node\> --image-type rootfs --metrics
@@ -1025,10 +1065,11 @@ Node: ncn-w001
 Role: target
 Filter: rootfs
 Images: 2
-Image Name    | LUN           | Type   | Read MBytes | Read IOPs
---------------+---------------+--------+-------------+----------
-image1_rootfs | image1_rootfs | rootfs | 46          | 89
-image2_rootfs | image2_rootfs | rootfs | 0           | 116
+Image Name    | Type   | udev_path                                    | Read MBytes | Read IOPs
+--------------+--------+----------------------------------------------+-------------+----------
+image2_rootfs | rootfs | /var/lib/cps-local/boot-images/image2_rootfs | 1           | 232
+image1_rootfs | rootfs | /var/lib/cps-local/boot-images/image1_rootfs | 1           | 234
+
 ```
 
 ##### iscsi get images --out-file \<filename\>
@@ -1038,7 +1079,7 @@ iscsi get images --out-file iscsi-output.txt
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
 
 ##### iscsi get images --name \<target-node\> --out-file \<filename\>
@@ -1048,7 +1089,7 @@ iscsi get images --name ncn-w001 --out-file iscsi-output.txt
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
 
 ##### iscsi get images --name \<target-node\> --image-type pe --metrics --out-file \<filename\>
@@ -1058,7 +1099,7 @@ iscsi get images --name ncn-w001 --image-type pe --metrics --out-file iscsi-outp
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
 
 ---
@@ -1083,7 +1124,7 @@ Retrieves read metrics (Read MBytes, Read IOPS) per LUN on target nodes, or sess
 | :-------------- | :----- | :--------------------------------------------------- | :----------------------------------------- |
 | `--name`        | String | Target/Initiator node name to inspect                | **Required**                               |
 | `--config-file` | String | Backup configuration file to compare metrics against | `None` (uses current active target config) |
-| `--out-file`    | String | Save output to specified file path                   | `None` (writes to stdout)                  |
+| `--out-file`    | String | Save output to specified file path                   | `iscsi-output.txt`                         |
 
 #### Command Combinations
 
@@ -1094,7 +1135,213 @@ iscsi get metrics
 ```
 
 ```text
-[Output Placeholder]
+Node: ncn-w001
+Role: target
+
+TPGTs: 1, LUNs: 10
+
+Image Summary
+Total Images | RootFS | PE | Unknown
+-------------+--------+----+--------
+10           | 2      | 8  | 0
+
+LUN read metrics
+IQN                                | TPGT   | LUN ID | LUN Name      | Read MBytes | Read IOPs
+-----------------------------------+--------+--------+---------------+-------------+----------
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 0      | image1_rootfs | 0           | 0
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 1      | image2_rootfs | 0           | 0
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 2      | image1_pe     | 0           | 0
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 3      | image2_pe     | 0           | 0
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 4      | image3_pe     | 0           | 0
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 5      | image4_pe     | 0           | 0
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 6      | image5_pe     | 0           | 0
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 7      | image6_pe     | 0           | 0
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 8      | image7_pe     | 0           | 0
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 9      | image8_pe     | 0           | 0
+
+Image read metrics
+Image Name    | Type   | udev_path                                    | Read MBytes | Read IOPs
+--------------+--------+----------------------------------------------+-------------+----------
+image8_pe     | pe     | /var/lib/cps-local/boot-images/image8_pe     | 0           | 0
+image7_pe     | pe     | /var/lib/cps-local/boot-images/image7_pe     | 0           | 0
+image6_pe     | pe     | /var/lib/cps-local/boot-images/image6_pe     | 0           | 0
+image5_pe     | pe     | /var/lib/cps-local/boot-images/image5_pe     | 0           | 0
+image4_pe     | pe     | /var/lib/cps-local/boot-images/image4_pe     | 0           | 0
+image3_pe     | pe     | /var/lib/cps-local/boot-images/image3_pe     | 0           | 0
+image2_pe     | pe     | /var/lib/cps-local/boot-images/image2_pe     | 0           | 0
+image1_pe     | pe     | /var/lib/cps-local/boot-images/image1_pe     | 0           | 0
+image2_rootfs | rootfs | /var/lib/cps-local/boot-images/image2_rootfs | 0           | 0
+image1_rootfs | rootfs | /var/lib/cps-local/boot-images/image1_rootfs | 0           | 0
+
+Removed images since backup comparison
+Type   | Image         | Path
+-------+---------------+---------------------------------------------
+rootfs | image1_rootfs | /var/lib/cps-local/boot_images/image1_rootfs
+rootfs | image2_rootfs | /var/lib/cps-local/boot_images/image2_rootfs
+pe     | image1_pe     | /var/lib/cps-local/boot_images/image1_pe.img
+pe     | image2_pe     | /var/lib/cps-local/boot_images/image2_pe.img
+pe     | image3_pe     | /var/lib/cps-local/boot_images/image3_pe.img
+pe     | image4_pe     | /var/lib/cps-local/boot_images/image4_pe.img
+pe     | image5_pe     | /var/lib/cps-local/boot_images/image5_pe.img
+pe     | image6_pe     | /var/lib/cps-local/boot_images/image6_pe.img
+pe     | image7_pe     | /var/lib/cps-local/boot_images/image7_pe.img
+pe     | image8_pe     | /var/lib/cps-local/boot_images/image8_pe.img
+
+Comparison source
+/etc/rtslib-fb-target/backup/saveconfig-20260616-13:56:56-json.gz
+
+Snapshot change summary
+IQNs + | IQNs - | TPGTs + | TPGTs - | LUNs + | LUNs - | ACLs + | ACLs - | Storage + | Storage - | Rootfs - | PE -
+-------+--------+---------+---------+--------+--------+--------+--------+-----------+-----------+----------+-----
+1      | 1      | 1       | 1       | 10     | 10     | 0      | 0      | 10        | 10        | 2        | 8
+
+Node: ncn-w002
+Role: target
+
+TPGTs: 1, LUNs: 10
+
+Image Summary
+Total Images | RootFS | PE | Unknown
+-------------+--------+----+--------
+10           | 2      | 8  | 0
+
+LUN read metrics
+IQN                                | TPGT   | LUN ID | LUN Name      | Read MBytes | Read IOPs
+-----------------------------------+--------+--------+---------------+-------------+----------
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 0      | image1_rootfs | 0           | 0
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 1      | image2_rootfs | 0           | 0
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 2      | image1_pe     | 0           | 0
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 3      | image2_pe     | 0           | 0
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 4      | image3_pe     | 0           | 0
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 5      | image4_pe     | 0           | 0
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 6      | image5_pe     | 0           | 0
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 7      | image6_pe     | 0           | 0
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 8      | image7_pe     | 0           | 0
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 9      | image8_pe     | 0           | 0
+
+Image read metrics
+Image Name    | Type   | udev_path                                    | Read MBytes | Read IOPs
+--------------+--------+----------------------------------------------+-------------+----------
+image8_pe     | pe     | /var/lib/cps-local/boot-images/image8_pe     | 0           | 0
+image7_pe     | pe     | /var/lib/cps-local/boot-images/image7_pe     | 0           | 0
+image6_pe     | pe     | /var/lib/cps-local/boot-images/image6_pe     | 0           | 0
+image5_pe     | pe     | /var/lib/cps-local/boot-images/image5_pe     | 0           | 0
+image4_pe     | pe     | /var/lib/cps-local/boot-images/image4_pe     | 0           | 0
+image3_pe     | pe     | /var/lib/cps-local/boot-images/image3_pe     | 0           | 0
+image2_pe     | pe     | /var/lib/cps-local/boot-images/image2_pe     | 0           | 0
+image1_pe     | pe     | /var/lib/cps-local/boot-images/image1_pe     | 0           | 0
+image2_rootfs | rootfs | /var/lib/cps-local/boot-images/image2_rootfs | 0           | 0
+image1_rootfs | rootfs | /var/lib/cps-local/boot-images/image1_rootfs | 0           | 0
+
+Removed images since backup comparison
+Type   | Image         | Path
+-------+---------------+---------------------------------------------
+rootfs | image1_rootfs | /var/lib/cps-local/boot_images/image1_rootfs
+rootfs | image2_rootfs | /var/lib/cps-local/boot_images/image2_rootfs
+pe     | image1_pe     | /var/lib/cps-local/boot_images/image1_pe.img
+pe     | image2_pe     | /var/lib/cps-local/boot_images/image2_pe.img
+pe     | image3_pe     | /var/lib/cps-local/boot_images/image3_pe.img
+pe     | image4_pe     | /var/lib/cps-local/boot_images/image4_pe.img
+pe     | image5_pe     | /var/lib/cps-local/boot_images/image5_pe.img
+pe     | image6_pe     | /var/lib/cps-local/boot_images/image6_pe.img
+pe     | image7_pe     | /var/lib/cps-local/boot_images/image7_pe.img
+pe     | image8_pe     | /var/lib/cps-local/boot_images/image8_pe.img
+
+Comparison source
+/etc/rtslib-fb-target/backup/saveconfig-20260616-13:57:58-json.gz
+
+Snapshot change summary
+IQNs + | IQNs - | TPGTs + | TPGTs - | LUNs + | LUNs - | ACLs + | ACLs - | Storage + | Storage - | Rootfs - | PE -
+-------+--------+---------+---------+--------+--------+--------+--------+-----------+-----------+----------+-----
+1      | 1      | 1       | 1       | 10     | 10     | 0      | 0      | 10        | 10        | 2        | 8
+
+Node: ncn-w003
+Role: initiator
+
+Sessions: 2
+Total mounts: 20
+Mounted: 0
+Unmounted: 20
+
+Session Details
+
+Target: iqn.2026-04.lab.local:lab.ncn-w001
+  Portal: 192.168.122.49:3260,1
+  SID: 1
+  Connection State: LOGGED IN
+  Session State: LOGGED_IN
+  Devices:
+    LUN 0: sda
+    LUN 1: sdq
+    LUN 2: sdp
+    LUN 3: sdn
+    LUN 4: sdl
+    LUN 5: sdj
+    LUN 6: sdh
+    LUN 7: sdf
+    LUN 8: sdd
+    LUN 9: sdb
+
+Target: iqn.2026-04.lab.local:lab.ncn-w002
+  Portal: 192.168.122.66:3260,1
+  SID: 2
+  Connection State: LOGGED IN
+  Session State: LOGGED_IN
+  Devices:
+    LUN 0: sdc
+    LUN 1: sdt
+    LUN 2: sds
+    LUN 3: sdr
+    LUN 4: sdo
+    LUN 5: sdm
+    LUN 6: sdk
+    LUN 7: sdi
+    LUN 8: sdg
+    LUN 9: sde
+
+Node: ncn-w004
+Role: initiator
+
+Sessions: 2
+Total mounts: 20
+Mounted: 0
+Unmounted: 20
+
+Session Details
+
+Target: iqn.2026-04.lab.local:lab.ncn-w001
+  Portal: 192.168.122.49:3260,1
+  SID: 1
+  Connection State: LOGGED IN
+  Session State: LOGGED_IN
+  Devices:
+    LUN 0: sdb
+    LUN 1: sdr
+    LUN 2: sdq
+    LUN 3: sdo
+    LUN 4: sdn
+    LUN 5: sdl
+    LUN 6: sdi
+    LUN 7: sdg
+    LUN 8: sde
+    LUN 9: sdc
+
+Target: iqn.2026-04.lab.local:lab.ncn-w002
+  Portal: 192.168.122.66:3260,1
+  SID: 2
+  Connection State: LOGGED IN
+  Session State: LOGGED_IN
+  Devices:
+    LUN 0: sda
+    LUN 1: sdt
+    LUN 2: sds
+    LUN 3: sdp
+    LUN 4: sdm
+    LUN 5: sdk
+    LUN 6: sdj
+    LUN 7: sdh
+    LUN 8: sdf
+    LUN 9: sdd
 ```
 
 ##### iscsi get metrics --name \<node-name\>
@@ -1104,6 +1351,65 @@ iscsi get metrics --name ncn-w001
 ```
 
 ```text
+Node: ncn-w001
+Role: target
+
+TPGTs: 1, LUNs: 10
+
+Image Summary
+Total Images | RootFS | PE | Unknown
+-------------+--------+----+--------
+10           | 2      | 8  | 0
+
+LUN read metrics
+IQN                                | TPGT   | LUN ID | LUN Name      | Read MBytes | Read IOPs
+-----------------------------------+--------+--------+---------------+-------------+----------
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 0      | image1_rootfs | 1           | 234
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 1      | image2_rootfs | 1           | 232
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 2      | image1_pe     | 1           | 232
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 3      | image2_pe     | 1           | 232
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 4      | image3_pe     | 1           | 232
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 5      | image4_pe     | 1           | 232
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 6      | image5_pe     | 1           | 232
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 7      | image6_pe     | 1           | 232
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 8      | image7_pe     | 1           | 232
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 9      | image8_pe     | 0           | 162
+
+Image read metrics
+Image Name    | Type   | udev_path                                    | Read MBytes | Read IOPs
+--------------+--------+----------------------------------------------+-------------+----------
+image8_pe     | pe     | /var/lib/cps-local/boot-images/image8_pe     | 0           | 162
+image7_pe     | pe     | /var/lib/cps-local/boot-images/image7_pe     | 1           | 232
+image6_pe     | pe     | /var/lib/cps-local/boot-images/image6_pe     | 1           | 232
+image5_pe     | pe     | /var/lib/cps-local/boot-images/image5_pe     | 1           | 232
+image4_pe     | pe     | /var/lib/cps-local/boot-images/image4_pe     | 1           | 232
+image3_pe     | pe     | /var/lib/cps-local/boot-images/image3_pe     | 1           | 232
+image2_pe     | pe     | /var/lib/cps-local/boot-images/image2_pe     | 1           | 232
+image1_pe     | pe     | /var/lib/cps-local/boot-images/image1_pe     | 1           | 232
+image2_rootfs | rootfs | /var/lib/cps-local/boot-images/image2_rootfs | 1           | 232
+image1_rootfs | rootfs | /var/lib/cps-local/boot-images/image1_rootfs | 1           | 234
+
+Removed images since backup comparison
+Type   | Image         | Path
+-------+---------------+---------------------------------------------
+rootfs | image1_rootfs | /var/lib/cps-local/boot_images/image1_rootfs
+rootfs | image2_rootfs | /var/lib/cps-local/boot_images/image2_rootfs
+pe     | image1_pe     | /var/lib/cps-local/boot_images/image1_pe.img
+pe     | image2_pe     | /var/lib/cps-local/boot_images/image2_pe.img
+pe     | image3_pe     | /var/lib/cps-local/boot_images/image3_pe.img
+pe     | image4_pe     | /var/lib/cps-local/boot_images/image4_pe.img
+pe     | image5_pe     | /var/lib/cps-local/boot_images/image5_pe.img
+pe     | image6_pe     | /var/lib/cps-local/boot_images/image6_pe.img
+pe     | image7_pe     | /var/lib/cps-local/boot_images/image7_pe.img
+pe     | image8_pe     | /var/lib/cps-local/boot_images/image8_pe.img
+
+Comparison source
+/etc/rtslib-fb-target/backup/saveconfig-20260616-13:56:56-json.gz
+
+Snapshot change summary
+IQNs + | IQNs - | TPGTs + | TPGTs - | LUNs + | LUNs - | ACLs + | ACLs - | Storage + | Storage - | Rootfs - | PE -
+-------+--------+---------+---------+--------+--------+--------+--------+-----------+-----------+----------+-----
+1      | 1      | 1       | 1       | 10     | 10     | 0      | 0      | 10        | 10        | 2        | 8
 
 ```
 
@@ -1168,7 +1474,7 @@ iscsi get metrics --name ncn-w001 --out-file iscsi-output.txt
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
 
 ##### iscsi get metrics --name \<node-name\> --config-file \<path\> --out-file \<filename\>
@@ -1178,7 +1484,7 @@ iscsi get metrics --name ncn-w001 --config-file /etc/target/saveconfig.json --ou
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
 
 ---
@@ -1202,7 +1508,7 @@ Displays detailed active iSCSI session mapping on initiator nodes.
 | Flag         | Type   | Description                        | Default                      |
 | :----------- | :----- | :--------------------------------- | :--------------------------- |
 | `--name`     | String | Initiator node name to inspect     | `None` (all initiator nodes) |
-| `--out-file` | String | Save output to specified file path | `None` (writes to stdout)    |
+| `--out-file` | String | Save output to specified file path | `iscsi-output.txt`           |
 
 #### Command Combinations
 
@@ -1213,7 +1519,17 @@ iscsi get sessions
 ```
 
 ```text
-[Output Placeholder]
+Node: ncn-w003
+Role: initiator
+
+tcp: [2] 192.168.122.49:3260,1 iqn.2026-04.lab.local:lab.ncn-w001 (non-flash)
+tcp: [3] 192.168.122.66:3260,1 iqn.2026-04.lab.local:lab.ncn-w002 (non-flash)
+
+Node: ncn-w004
+Role: initiator
+
+tcp: [1] 192.168.122.49:3260,1 iqn.2026-04.lab.local:lab.ncn-w001 (non-flash)
+tcp: [2] 192.168.122.66:3260,1 iqn.2026-04.lab.local:lab.ncn-w002 (non-flash)
 ```
 
 ##### iscsi get sessions --name \<initiator-node\>
@@ -1238,7 +1554,7 @@ iscsi get sessions --out-file iscsi-output.txt
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
 
 ##### iscsi get sessions --name \<initiator-node\> --out-file \<filename\>
@@ -1248,7 +1564,7 @@ iscsi get sessions --name ncn-w003 --out-file iscsi-output.txt
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
 
 ---
@@ -1272,7 +1588,7 @@ Displays local device mounts and state mappings for initiator nodes.
 | Flag         | Type   | Description                        | Default                      |
 | :----------- | :----- | :--------------------------------- | :--------------------------- |
 | `--name`     | String | Initiator node name to inspect     | `None` (all initiator nodes) |
-| `--out-file` | String | Save output to specified file path | `None` (writes to stdout)    |
+| `--out-file` | String | Save output to specified file path | `iscsi-output.txt`           |
 
 #### Command Combinations
 
@@ -1283,7 +1599,59 @@ iscsi get mount-status
 ```
 
 ```text
-[Output Placeholder]
+Mounted: 0, Unmounted: 40
+
+Node: ncn-w003
+Role: initiator
+
+Device   | Mount Point | Status
+---------+-------------+----------
+/dev/sda | -           | unmounted
+/dev/sdb | -           | unmounted
+/dev/sdc | -           | unmounted
+/dev/sdd | -           | unmounted
+/dev/sde | -           | unmounted
+/dev/sdf | -           | unmounted
+/dev/sdg | -           | unmounted
+/dev/sdh | -           | unmounted
+/dev/sdi | -           | unmounted
+/dev/sdj | -           | unmounted
+/dev/sdk | -           | unmounted
+/dev/sdl | -           | unmounted
+/dev/sdm | -           | unmounted
+/dev/sdn | -           | unmounted
+/dev/sdo | -           | unmounted
+/dev/sdp | -           | unmounted
+/dev/sdq | -           | unmounted
+/dev/sdr | -           | unmounted
+/dev/sds | -           | unmounted
+/dev/sdt | -           | unmounted
+
+Node: ncn-w004
+Role: initiator
+
+Device   | Mount Point | Status
+---------+-------------+----------
+/dev/sda | -           | unmounted
+/dev/sdb | -           | unmounted
+/dev/sdc | -           | unmounted
+/dev/sdd | -           | unmounted
+/dev/sde | -           | unmounted
+/dev/sdf | -           | unmounted
+/dev/sdg | -           | unmounted
+/dev/sdh | -           | unmounted
+/dev/sdi | -           | unmounted
+/dev/sdj | -           | unmounted
+/dev/sdk | -           | unmounted
+/dev/sdl | -           | unmounted
+/dev/sdm | -           | unmounted
+/dev/sdn | -           | unmounted
+/dev/sdo | -           | unmounted
+/dev/sdp | -           | unmounted
+/dev/sdq | -           | unmounted
+/dev/sdr | -           | unmounted
+/dev/sds | -           | unmounted
+/dev/sdt | -           | unmounted
 ```
 
 ##### iscsi get mount-status --name \<initiator-node\>
@@ -1327,7 +1695,7 @@ iscsi get mount-status --out-file iscsi-output.txt
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
 
 ##### iscsi get mount-status --name \<initiator-node\> --out-file \<filename\>
@@ -1337,7 +1705,7 @@ iscsi get mount-status --name ncn-w003 --out-file iscsi-output.txt
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
 
 ---
@@ -1358,11 +1726,11 @@ Scans system logs for storage/network errors on targets or initiators.
 
 #### Options
 
-| Flag         | Type    | Description                                    | Default                   |
-| :----------- | :------ | :--------------------------------------------- | :------------------------ |
-| `--name`     | String  | Node name to inspect                           | `None` (all nodes)        |
-| `--lines`    | Integer | Number of recent log lines to collect per node | `200`                     |
-| `--out-file` | String  | Save output to specified file path             | `None` (writes to stdout) |
+| Flag         | Type    | Description                                    | Default            |
+| :----------- | :------ | :--------------------------------------------- | :----------------- |
+| `--name`     | String  | Node name to inspect                           | `None` (all nodes) |
+| `--lines`    | Integer | Number of recent log lines to collect per node | `200`              |
+| `--out-file` | String  | Save output to specified file path             | `iscsi-output.txt` |
 
 #### Command Combinations
 
@@ -1536,7 +1904,7 @@ iscsi get errors --out-file iscsi-output.txt
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
 
 ##### iscsi get errors --name \<node-name\> --lines \<number\> --out-file \<filename\>
@@ -1546,7 +1914,7 @@ iscsi get errors --name ncn-w001 --lines 100 --out-file iscsi-output.txt
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
 
 ---
@@ -1622,11 +1990,11 @@ Shows a detailed summary of the configured iSCSI resources (IQNs, TPGTs, LUNs, a
 
 #### Options
 
-| Flag         | Type   | Description                        | Default                   |
-| :----------- | :----- | :--------------------------------- | :------------------------ |
-| `--name`     | String | Node name to inspect               | **Required**              |
-| `--metrics`  | Flag   | Include storage metrics            | `False`                   |
-| `--out-file` | String | Save output to specified file path | `None` (writes to stdout) |
+| Flag         | Type   | Description                        | Default            |
+| :----------- | :----- | :--------------------------------- | :----------------- |
+| `--name`     | String | Node name to inspect               | **Required**       |
+| `--metrics`  | Flag   | Include storage metrics            | `False`            |
+| `--out-file` | String | Save output to specified file path | `iscsi-output.txt` |
 
 #### Command Combinations
 
@@ -1637,7 +2005,164 @@ iscsi describe node
 ```
 
 ```text
-[Output Placeholder]
+Node: ncn-w001
+Role: target
+Config file: saveconfig.json
+Path: /etc/rtslib-fb-target/saveconfig.json
+IQNs: iqn.2026-04.lab.local:lab.ncn-w001
+TPGTs: 1, LUNs: 10, Images: 10
+
+TPGTs
+IQN                                | TPGT   | LUNs | ACLs | ACL names
+-----------------------------------+--------+------+------+----------
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 10   | 0    | None
+
+LUNs
+IQN                                | TPGT   | LUN ID | LUN Name      | Storage Object
+-----------------------------------+--------+--------+---------------+---------------------------------
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 0      | image1_rootfs | /backstores/fileio/image1_rootfs
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 1      | image2_rootfs | /backstores/fileio/image2_rootfs
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 2      | image1_pe     | /backstores/fileio/image1_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 3      | image2_pe     | /backstores/fileio/image2_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 4      | image3_pe     | /backstores/fileio/image3_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 5      | image4_pe     | /backstores/fileio/image4_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 6      | image5_pe     | /backstores/fileio/image5_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 7      | image6_pe     | /backstores/fileio/image6_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 8      | image7_pe     | /backstores/fileio/image7_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 9      | image8_pe     | /backstores/fileio/image8_pe
+
+Images
+Image Name    | Type   | udev_path
+--------------+--------+---------------------------------------------
+image8_pe     | pe     | /var/lib/cps-local/boot-images/image8_pe
+image7_pe     | pe     | /var/lib/cps-local/boot-images/image7_pe
+image6_pe     | pe     | /var/lib/cps-local/boot-images/image6_pe
+image5_pe     | pe     | /var/lib/cps-local/boot-images/image5_pe
+image4_pe     | pe     | /var/lib/cps-local/boot-images/image4_pe
+image3_pe     | pe     | /var/lib/cps-local/boot-images/image3_pe
+image2_pe     | pe     | /var/lib/cps-local/boot-images/image2_pe
+image1_pe     | pe     | /var/lib/cps-local/boot-images/image1_pe
+image2_rootfs | rootfs | /var/lib/cps-local/boot-images/image2_rootfs
+image1_rootfs | rootfs | /var/lib/cps-local/boot-images/image1_rootfs
+
+Backup Configurations
+DATE                    | FILE                                 | PATH
+------------------------+--------------------------------------+------------------------------------------------------------------
+16 Jun 2026 01:56:56 PM | saveconfig-20260616-13:56:56-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260616-13:56:56-json.gz
+16 Jun 2026 01:06:20 PM | saveconfig-20260616-13:06:20-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260616-13:06:20-json.gz
+15 Jun 2026 03:17:31 PM | saveconfig-20260615-15:17:31-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260615-15:17:31-json.gz
+12 Jun 2026 02:10:15 PM | saveconfig-20260612-14:10:15-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260612-14:10:15-json.gz
+
+Node: ncn-w002
+Role: target
+Config file: saveconfig.json
+Path: /etc/rtslib-fb-target/saveconfig.json
+IQNs: iqn.2026-04.lab.local:lab.ncn-w002
+TPGTs: 1, LUNs: 10, Images: 10
+
+TPGTs
+IQN                                | TPGT   | LUNs | ACLs | ACL names
+-----------------------------------+--------+------+------+----------
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 10   | 0    | None
+
+LUNs
+IQN                                | TPGT   | LUN ID | LUN Name      | Storage Object
+-----------------------------------+--------+--------+---------------+---------------------------------
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 0      | image1_rootfs | /backstores/fileio/image1_rootfs
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 1      | image2_rootfs | /backstores/fileio/image2_rootfs
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 2      | image1_pe     | /backstores/fileio/image1_pe
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 3      | image2_pe     | /backstores/fileio/image2_pe
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 4      | image3_pe     | /backstores/fileio/image3_pe
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 5      | image4_pe     | /backstores/fileio/image4_pe
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 6      | image5_pe     | /backstores/fileio/image5_pe
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 7      | image6_pe     | /backstores/fileio/image6_pe
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 8      | image7_pe     | /backstores/fileio/image7_pe
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 9      | image8_pe     | /backstores/fileio/image8_pe
+
+Images
+Image Name    | Type   | udev_path
+--------------+--------+---------------------------------------------
+image8_pe     | pe     | /var/lib/cps-local/boot-images/image8_pe
+image7_pe     | pe     | /var/lib/cps-local/boot-images/image7_pe
+image6_pe     | pe     | /var/lib/cps-local/boot-images/image6_pe
+image5_pe     | pe     | /var/lib/cps-local/boot-images/image5_pe
+image4_pe     | pe     | /var/lib/cps-local/boot-images/image4_pe
+image3_pe     | pe     | /var/lib/cps-local/boot-images/image3_pe
+image2_pe     | pe     | /var/lib/cps-local/boot-images/image2_pe
+image1_pe     | pe     | /var/lib/cps-local/boot-images/image1_pe
+image2_rootfs | rootfs | /var/lib/cps-local/boot-images/image2_rootfs
+image1_rootfs | rootfs | /var/lib/cps-local/boot-images/image1_rootfs
+
+Backup Configurations
+DATE                    | FILE                                 | PATH
+------------------------+--------------------------------------+------------------------------------------------------------------
+16 Jun 2026 01:57:58 PM | saveconfig-20260616-13:57:58-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260616-13:57:58-json.gz
+12 Jun 2026 02:12:31 PM | saveconfig-20260612-14:12:31-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260612-14:12:31-json.gz
+
+Node: ncn-w003
+Role: initiator
+Sessions: 2, Total mounts: 20, Mounted: 0, Unmounted: 20
+
+Session details:
+- iqn.2026-04.lab.local:lab.ncn-w001 | Portal: 192.168.122.49:3260,1 | State: LOGGED_IN | Devices: 10
+- iqn.2026-04.lab.local:lab.ncn-w002 | Portal: 192.168.122.66:3260,1 | State: LOGGED_IN | Devices: 10
+
+Mount status:
+Device   | Mount Point | Status
+---------+-------------+----------
+/dev/sda | -           | unmounted
+/dev/sdb | -           | unmounted
+/dev/sdc | -           | unmounted
+/dev/sdd | -           | unmounted
+/dev/sde | -           | unmounted
+/dev/sdf | -           | unmounted
+/dev/sdg | -           | unmounted
+/dev/sdh | -           | unmounted
+/dev/sdi | -           | unmounted
+/dev/sdj | -           | unmounted
+/dev/sdk | -           | unmounted
+/dev/sdl | -           | unmounted
+/dev/sdm | -           | unmounted
+/dev/sdn | -           | unmounted
+/dev/sdo | -           | unmounted
+/dev/sdp | -           | unmounted
+/dev/sdq | -           | unmounted
+/dev/sdr | -           | unmounted
+/dev/sds | -           | unmounted
+/dev/sdt | -           | unmounted
+
+Node: ncn-w004
+Role: initiator
+Sessions: 2, Total mounts: 20, Mounted: 0, Unmounted: 20
+
+Session details:
+- iqn.2026-04.lab.local:lab.ncn-w001 | Portal: 192.168.122.49:3260,1 | State: LOGGED_IN | Devices: 10
+- iqn.2026-04.lab.local:lab.ncn-w002 | Portal: 192.168.122.66:3260,1 | State: LOGGED_IN | Devices: 10
+
+Mount status:
+Device   | Mount Point | Status
+---------+-------------+----------
+/dev/sda | -           | unmounted
+/dev/sdb | -           | unmounted
+/dev/sdc | -           | unmounted
+/dev/sdd | -           | unmounted
+/dev/sde | -           | unmounted
+/dev/sdf | -           | unmounted
+/dev/sdg | -           | unmounted
+/dev/sdh | -           | unmounted
+/dev/sdi | -           | unmounted
+/dev/sdj | -           | unmounted
+/dev/sdk | -           | unmounted
+/dev/sdl | -           | unmounted
+/dev/sdm | -           | unmounted
+/dev/sdn | -           | unmounted
+/dev/sdo | -           | unmounted
+/dev/sdp | -           | unmounted
+/dev/sdq | -           | unmounted
+/dev/sdr | -           | unmounted
+/dev/sds | -           | unmounted
+/dev/sdt | -           | unmounted
+
 ```
 
 ##### iscsi describe node --name \<node-name\>
@@ -1647,7 +2172,54 @@ iscsi describe node --name ncn-w001
 ```
 
 ```text
-[Output Placeholder]
+Node: ncn-w001
+Role: target
+Config file: saveconfig.json
+Path: /etc/rtslib-fb-target/saveconfig.json
+IQNs: iqn.2026-04.lab.local:lab.ncn-w001
+TPGTs: 1, LUNs: 10, Images: 10
+
+TPGTs
+IQN                                | TPGT   | LUNs | ACLs | ACL names
+-----------------------------------+--------+------+------+----------
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 10   | 0    | None
+
+LUNs
+IQN                                | TPGT   | LUN ID | LUN Name      | Storage Object
+-----------------------------------+--------+--------+---------------+---------------------------------
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 0      | image1_rootfs | /backstores/fileio/image1_rootfs
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 1      | image2_rootfs | /backstores/fileio/image2_rootfs
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 2      | image1_pe     | /backstores/fileio/image1_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 3      | image2_pe     | /backstores/fileio/image2_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 4      | image3_pe     | /backstores/fileio/image3_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 5      | image4_pe     | /backstores/fileio/image4_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 6      | image5_pe     | /backstores/fileio/image5_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 7      | image6_pe     | /backstores/fileio/image6_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 8      | image7_pe     | /backstores/fileio/image7_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 9      | image8_pe     | /backstores/fileio/image8_pe
+
+Images
+Image Name    | Type   | udev_path
+--------------+--------+---------------------------------------------
+image8_pe     | pe     | /var/lib/cps-local/boot-images/image8_pe
+image7_pe     | pe     | /var/lib/cps-local/boot-images/image7_pe
+image6_pe     | pe     | /var/lib/cps-local/boot-images/image6_pe
+image5_pe     | pe     | /var/lib/cps-local/boot-images/image5_pe
+image4_pe     | pe     | /var/lib/cps-local/boot-images/image4_pe
+image3_pe     | pe     | /var/lib/cps-local/boot-images/image3_pe
+image2_pe     | pe     | /var/lib/cps-local/boot-images/image2_pe
+image1_pe     | pe     | /var/lib/cps-local/boot-images/image1_pe
+image2_rootfs | rootfs | /var/lib/cps-local/boot-images/image2_rootfs
+image1_rootfs | rootfs | /var/lib/cps-local/boot-images/image1_rootfs
+
+Backup Configurations
+DATE                    | FILE                                 | PATH
+------------------------+--------------------------------------+------------------------------------------------------------------
+16 Jun 2026 01:56:56 PM | saveconfig-20260616-13:56:56-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260616-13:56:56-json.gz
+16 Jun 2026 01:06:20 PM | saveconfig-20260616-13:06:20-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260616-13:06:20-json.gz
+15 Jun 2026 03:17:31 PM | saveconfig-20260615-15:17:31-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260615-15:17:31-json.gz
+12 Jun 2026 02:10:15 PM | saveconfig-20260612-14:10:15-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260612-14:10:15-json.gz
+
 ```
 
 ##### iscsi describe node --name \<node-name\> --metrics
@@ -1657,7 +2229,54 @@ iscsi describe node --name ncn-w001 --metrics
 ```
 
 ```text
-[Output Placeholder]
+Node: ncn-w001
+Role: target
+Config file: saveconfig.json
+Path: /etc/rtslib-fb-target/saveconfig.json
+IQNs: iqn.2026-04.lab.local:lab.ncn-w001
+TPGTs: 1, LUNs: 10, Images: 10
+
+TPGTs
+IQN                                | TPGT   | LUNs | ACLs | ACL names
+-----------------------------------+--------+------+------+----------
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 10   | 0    | None
+
+LUNs
+IQN                                | TPGT   | LUN ID | LUN Name      | Storage Object                   | Read MBytes | Read IOPs
+-----------------------------------+--------+--------+---------------+----------------------------------+-------------+----------
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 0      | image1_rootfs | /backstores/fileio/image1_rootfs | 1           | 234
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 1      | image2_rootfs | /backstores/fileio/image2_rootfs | 1           | 232
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 2      | image1_pe     | /backstores/fileio/image1_pe     | 1           | 232
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 3      | image2_pe     | /backstores/fileio/image2_pe     | 1           | 232
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 4      | image3_pe     | /backstores/fileio/image3_pe     | 1           | 232
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 5      | image4_pe     | /backstores/fileio/image4_pe     | 1           | 232
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 6      | image5_pe     | /backstores/fileio/image5_pe     | 1           | 232
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 7      | image6_pe     | /backstores/fileio/image6_pe     | 1           | 232
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 8      | image7_pe     | /backstores/fileio/image7_pe     | 1           | 232
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 9      | image8_pe     | /backstores/fileio/image8_pe     | 0           | 162
+
+Images
+Image Name    | Type   | udev_path                                    | Read MBytes | Read IOPs
+--------------+--------+----------------------------------------------+-------------+----------
+image8_pe     | pe     | /var/lib/cps-local/boot-images/image8_pe     | 0           | 162
+image7_pe     | pe     | /var/lib/cps-local/boot-images/image7_pe     | 1           | 232
+image6_pe     | pe     | /var/lib/cps-local/boot-images/image6_pe     | 1           | 232
+image5_pe     | pe     | /var/lib/cps-local/boot-images/image5_pe     | 1           | 232
+image4_pe     | pe     | /var/lib/cps-local/boot-images/image4_pe     | 1           | 232
+image3_pe     | pe     | /var/lib/cps-local/boot-images/image3_pe     | 1           | 232
+image2_pe     | pe     | /var/lib/cps-local/boot-images/image2_pe     | 1           | 232
+image1_pe     | pe     | /var/lib/cps-local/boot-images/image1_pe     | 1           | 232
+image2_rootfs | rootfs | /var/lib/cps-local/boot-images/image2_rootfs | 1           | 232
+image1_rootfs | rootfs | /var/lib/cps-local/boot-images/image1_rootfs | 1           | 234
+
+Backup Configurations
+DATE                    | FILE                                 | PATH
+------------------------+--------------------------------------+------------------------------------------------------------------
+16 Jun 2026 01:56:56 PM | saveconfig-20260616-13:56:56-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260616-13:56:56-json.gz
+16 Jun 2026 01:06:20 PM | saveconfig-20260616-13:06:20-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260616-13:06:20-json.gz
+15 Jun 2026 03:17:31 PM | saveconfig-20260615-15:17:31-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260615-15:17:31-json.gz
+12 Jun 2026 02:10:15 PM | saveconfig-20260612-14:10:15-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260612-14:10:15-json.gz
+
 ```
 
 ##### iscsi describe node --name \<node-name\> --out-file \<filename\>
@@ -1667,7 +2286,7 @@ iscsi describe node --name ncn-w001 --out-file iscsi-output.txt
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
 
 ##### iscsi describe node --name \<node-name\> --metrics --out-file \<filename\>
@@ -1677,7 +2296,7 @@ iscsi describe node --name ncn-w001 --metrics --out-file iscsi-output.txt
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
 
 ---
@@ -1696,13 +2315,549 @@ Provides a detailed description summary of a specific backup configuration file 
 
 #### Options
 
-| Flag          | Type   | Description                               | Default                   |
-| :------------ | :----- | :---------------------------------------- | :------------------------ |
-| `--node`      | String | Target node name where the file is stored | **Required**              |
-| `--file-path` | String | Path to the backup configuration file     | **Required**              |
-| `--out-file`  | String | Save output to specified file path        | `None` (writes to stdout) |
+| Flag          | Type   | Description                               | Default            |
+| :------------ | :----- | :---------------------------------------- | :----------------- |
+| `--node`      | String | Target node name where the file is stored | **Required**       |
+| `--file-path` | String | Path to the backup configuration file     | **Required**       |
+| `--out-file`  | String | Save output to specified file path        | `iscsi-output.txt` |
 
 #### Command Combinations
+
+#### iscsi describe config
+
+```bash
+iscsi describe config
+```
+
+```text
+Node: ncn-w001
+Role: target
+Config file: saveconfig-20260616-13:56:56-json.gz
+Path: /etc/rtslib-fb-target/backup/saveconfig-20260616-13:56:56-json.gz
+IQNs: iqn.2026-04.lab.local:lab.target01
+TPGTs: 1, LUNs: 10, Images: 10
+
+TPGTs
+IQN                                | TPGT   | LUNs | ACLs | ACL names
+-----------------------------------+--------+------+------+----------
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 10   | 0    | None
+
+LUNs
+IQN                                | TPGT   | LUN ID | LUN Name      | Storage Object
+-----------------------------------+--------+--------+---------------+---------------------------------
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 9      | image8_pe     | /backstores/fileio/image8_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 8      | image7_pe     | /backstores/fileio/image7_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 7      | image6_pe     | /backstores/fileio/image6_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 6      | image5_pe     | /backstores/fileio/image5_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 5      | image4_pe     | /backstores/fileio/image4_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 4      | image3_pe     | /backstores/fileio/image3_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 3      | image2_pe     | /backstores/fileio/image2_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 2      | image1_pe     | /backstores/fileio/image1_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 1      | image2_rootfs | /backstores/fileio/image2_rootfs
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 0      | image1_rootfs | /backstores/fileio/image1_rootfs
+
+Images
+Image Name    | Type   | udev_path
+--------------+--------+---------------------------------------------
+image8_pe.img | pe     | /var/lib/cps-local/boot_images/image8_pe.img
+image7_pe.img | pe     | /var/lib/cps-local/boot_images/image7_pe.img
+image6_pe.img | pe     | /var/lib/cps-local/boot_images/image6_pe.img
+image5_pe.img | pe     | /var/lib/cps-local/boot_images/image5_pe.img
+image4_pe.img | pe     | /var/lib/cps-local/boot_images/image4_pe.img
+image3_pe.img | pe     | /var/lib/cps-local/boot_images/image3_pe.img
+image2_pe.img | pe     | /var/lib/cps-local/boot_images/image2_pe.img
+image1_pe.img | pe     | /var/lib/cps-local/boot_images/image1_pe.img
+image2_rootfs | rootfs | /var/lib/cps-local/boot_images/image2_rootfs
+image1_rootfs | rootfs | /var/lib/cps-local/boot_images/image1_rootfs
+
+Node: ncn-w001
+Role: target
+Config file: saveconfig-20260616-13:06:20-json.gz
+Path: /etc/rtslib-fb-target/backup/saveconfig-20260616-13:06:20-json.gz
+IQNs: iqn.2026-04.lab.local:lab.target01
+TPGTs: 1, LUNs: 10, Images: 10
+
+TPGTs
+IQN                                | TPGT   | LUNs | ACLs | ACL names
+-----------------------------------+--------+------+------+----------
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 10   | 0    | None
+
+LUNs
+IQN                                | TPGT   | LUN ID | LUN Name      | Storage Object
+-----------------------------------+--------+--------+---------------+---------------------------------
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 0      | image1_rootfs | /backstores/fileio/image1_rootfs
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 1      | image2_rootfs | /backstores/fileio/image2_rootfs
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 2      | image1_pe     | /backstores/fileio/image1_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 3      | image2_pe     | /backstores/fileio/image2_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 4      | image3_pe     | /backstores/fileio/image3_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 5      | image4_pe     | /backstores/fileio/image4_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 6      | image5_pe     | /backstores/fileio/image5_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 7      | image6_pe     | /backstores/fileio/image6_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 8      | image7_pe     | /backstores/fileio/image7_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 9      | image8_pe     | /backstores/fileio/image8_pe
+
+Images
+Image Name    | Type   | udev_path
+--------------+--------+---------------------------------------------
+image1_rootfs | rootfs | /var/lib/cps-local/boot_images/image1_rootfs
+image2_rootfs | rootfs | /var/lib/cps-local/boot_images/image2_rootfs
+image1_pe.img | pe     | /var/lib/cps-local/boot_images/image1_pe.img
+image2_pe.img | pe     | /var/lib/cps-local/boot_images/image2_pe.img
+image3_pe.img | pe     | /var/lib/cps-local/boot_images/image3_pe.img
+image4_pe.img | pe     | /var/lib/cps-local/boot_images/image4_pe.img
+image5_pe.img | pe     | /var/lib/cps-local/boot_images/image5_pe.img
+image6_pe.img | pe     | /var/lib/cps-local/boot_images/image6_pe.img
+image7_pe.img | pe     | /var/lib/cps-local/boot_images/image7_pe.img
+image8_pe.img | pe     | /var/lib/cps-local/boot_images/image8_pe.img
+
+Node: ncn-w001
+Role: target
+Config file: saveconfig-20260615-15:17:31-json.gz
+Path: /etc/rtslib-fb-target/backup/saveconfig-20260615-15:17:31-json.gz
+IQNs: iqn.2026-04.lab.local:lab.target01
+TPGTs: 1, LUNs: 10, Images: 10
+
+TPGTs
+IQN                                | TPGT   | LUNs | ACLs | ACL names
+-----------------------------------+--------+------+------+----------
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 10   | 0    | None
+
+LUNs
+IQN                                | TPGT   | LUN ID | LUN Name      | Storage Object
+-----------------------------------+--------+--------+---------------+---------------------------------
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 9      | image8_pe     | /backstores/fileio/image8_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 8      | image7_pe     | /backstores/fileio/image7_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 7      | image6_pe     | /backstores/fileio/image6_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 6      | image5_pe     | /backstores/fileio/image5_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 5      | image4_pe     | /backstores/fileio/image4_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 4      | image3_pe     | /backstores/fileio/image3_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 3      | image2_pe     | /backstores/fileio/image2_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 2      | image1_pe     | /backstores/fileio/image1_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 1      | image2_rootfs | /backstores/fileio/image2_rootfs
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 0      | image1_rootfs | /backstores/fileio/image1_rootfs
+
+Images
+Image Name    | Type   | udev_path
+--------------+--------+---------------------------------------------
+image8_pe.img | pe     | /var/lib/cps-local/boot_images/image8_pe.img
+image7_pe.img | pe     | /var/lib/cps-local/boot_images/image7_pe.img
+image6_pe.img | pe     | /var/lib/cps-local/boot_images/image6_pe.img
+image5_pe.img | pe     | /var/lib/cps-local/boot_images/image5_pe.img
+image4_pe.img | pe     | /var/lib/cps-local/boot_images/image4_pe.img
+image3_pe.img | pe     | /var/lib/cps-local/boot_images/image3_pe.img
+image2_pe.img | pe     | /var/lib/cps-local/boot_images/image2_pe.img
+image1_pe.img | pe     | /var/lib/cps-local/boot_images/image1_pe.img
+image2_rootfs | rootfs | /var/lib/cps-local/boot_images/image2_rootfs
+image1_rootfs | rootfs | /var/lib/cps-local/boot_images/image1_rootfs
+
+Node: ncn-w001
+Role: target
+Config file: saveconfig-20260612-14:10:15-json.gz
+Path: /etc/rtslib-fb-target/backup/saveconfig-20260612-14:10:15-json.gz
+IQNs: iqn.2026-04.lab.local:lab.target01
+TPGTs: 1, LUNs: 10, Images: 10
+
+TPGTs
+IQN                                | TPGT   | LUNs | ACLs | ACL names
+-----------------------------------+--------+------+------+----------
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 10   | 0    | None
+
+LUNs
+IQN                                | TPGT   | LUN ID | LUN Name     | Storage Object
+-----------------------------------+--------+--------+--------------+--------------------------------
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 9      | pe_disk8     | /backstores/fileio/pe_disk8
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 8      | pe_disk7     | /backstores/fileio/pe_disk7
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 7      | pe_disk6     | /backstores/fileio/pe_disk6
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 6      | pe_disk5     | /backstores/fileio/pe_disk5
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 5      | pe_disk4     | /backstores/fileio/pe_disk4
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 4      | pe_disk3     | /backstores/fileio/pe_disk3
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 3      | pe_disk2     | /backstores/fileio/pe_disk2
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 2      | pe_disk1     | /backstores/fileio/pe_disk1
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 1      | rootfs_disk2 | /backstores/fileio/rootfs_disk2
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 0      | rootfs_disk1 | /backstores/fileio/rootfs_disk1
+
+Images
+Image Name       | Type   | udev_path
+-----------------+--------+--------------------------------------
+pe_disk8.img     | pe     | /var/lib/iscsi_disks/pe_disk8.img
+pe_disk7.img     | pe     | /var/lib/iscsi_disks/pe_disk7.img
+pe_disk6.img     | pe     | /var/lib/iscsi_disks/pe_disk6.img
+pe_disk5.img     | pe     | /var/lib/iscsi_disks/pe_disk5.img
+pe_disk4.img     | pe     | /var/lib/iscsi_disks/pe_disk4.img
+pe_disk3.img     | pe     | /var/lib/iscsi_disks/pe_disk3.img
+pe_disk2.img     | pe     | /var/lib/iscsi_disks/pe_disk2.img
+pe_disk1.img     | pe     | /var/lib/iscsi_disks/pe_disk1.img
+rootfs_disk2.img | rootfs | /var/lib/iscsi_disks/rootfs_disk2.img
+rootfs_disk1.img | rootfs | /var/lib/iscsi_disks/rootfs_disk1.img
+
+Node: ncn-w001
+Role: target
+Config file: saveconfig.json
+Path: /etc/rtslib-fb-target/saveconfig.json
+IQNs: iqn.2026-04.lab.local:lab.ncn-w001
+TPGTs: 1, LUNs: 10, Images: 10
+
+TPGTs
+IQN                                | TPGT   | LUNs | ACLs | ACL names
+-----------------------------------+--------+------+------+----------
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 10   | 0    | None
+
+LUNs
+IQN                                | TPGT   | LUN ID | LUN Name      | Storage Object
+-----------------------------------+--------+--------+---------------+---------------------------------
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 9      | image8_pe     | /backstores/fileio/image8_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 8      | image7_pe     | /backstores/fileio/image7_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 7      | image6_pe     | /backstores/fileio/image6_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 6      | image5_pe     | /backstores/fileio/image5_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 5      | image4_pe     | /backstores/fileio/image4_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 4      | image3_pe     | /backstores/fileio/image3_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 3      | image2_pe     | /backstores/fileio/image2_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 2      | image1_pe     | /backstores/fileio/image1_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 1      | image2_rootfs | /backstores/fileio/image2_rootfs
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 0      | image1_rootfs | /backstores/fileio/image1_rootfs
+
+Images
+Image Name    | Type   | udev_path
+--------------+--------+---------------------------------------------
+image8_pe     | pe     | /var/lib/cps-local/boot-images/image8_pe
+image7_pe     | pe     | /var/lib/cps-local/boot-images/image7_pe
+image6_pe     | pe     | /var/lib/cps-local/boot-images/image6_pe
+image5_pe     | pe     | /var/lib/cps-local/boot-images/image5_pe
+image4_pe     | pe     | /var/lib/cps-local/boot-images/image4_pe
+image3_pe     | pe     | /var/lib/cps-local/boot-images/image3_pe
+image2_pe     | pe     | /var/lib/cps-local/boot-images/image2_pe
+image1_pe     | pe     | /var/lib/cps-local/boot-images/image1_pe
+image2_rootfs | rootfs | /var/lib/cps-local/boot-images/image2_rootfs
+image1_rootfs | rootfs | /var/lib/cps-local/boot-images/image1_rootfs
+
+Node: ncn-w002
+Role: target
+Config file: saveconfig-20260616-13:57:58-json.gz
+Path: /etc/rtslib-fb-target/backup/saveconfig-20260616-13:57:58-json.gz
+IQNs: iqn.2026-04.lab.local:lab.target01
+TPGTs: 1, LUNs: 10, Images: 10
+
+TPGTs
+IQN                                | TPGT   | LUNs | ACLs | ACL names
+-----------------------------------+--------+------+------+----------
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 10   | 0    | None
+
+LUNs
+IQN                                | TPGT   | LUN ID | LUN Name      | Storage Object
+-----------------------------------+--------+--------+---------------+---------------------------------
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 9      | image8_pe     | /backstores/fileio/image8_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 8      | image7_pe     | /backstores/fileio/image7_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 7      | image6_pe     | /backstores/fileio/image6_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 6      | image5_pe     | /backstores/fileio/image5_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 5      | image4_pe     | /backstores/fileio/image4_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 4      | image3_pe     | /backstores/fileio/image3_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 3      | image2_pe     | /backstores/fileio/image2_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 2      | image1_pe     | /backstores/fileio/image1_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 1      | image2_rootfs | /backstores/fileio/image2_rootfs
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 0      | image1_rootfs | /backstores/fileio/image1_rootfs
+
+Images
+Image Name    | Type   | udev_path
+--------------+--------+---------------------------------------------
+image8_pe.img | pe     | /var/lib/cps-local/boot_images/image8_pe.img
+image7_pe.img | pe     | /var/lib/cps-local/boot_images/image7_pe.img
+image6_pe.img | pe     | /var/lib/cps-local/boot_images/image6_pe.img
+image5_pe.img | pe     | /var/lib/cps-local/boot_images/image5_pe.img
+image4_pe.img | pe     | /var/lib/cps-local/boot_images/image4_pe.img
+image3_pe.img | pe     | /var/lib/cps-local/boot_images/image3_pe.img
+image2_pe.img | pe     | /var/lib/cps-local/boot_images/image2_pe.img
+image1_pe.img | pe     | /var/lib/cps-local/boot_images/image1_pe.img
+image2_rootfs | rootfs | /var/lib/cps-local/boot_images/image2_rootfs
+image1_rootfs | rootfs | /var/lib/cps-local/boot_images/image1_rootfs
+
+Node: ncn-w002
+Role: target
+Config file: saveconfig-20260612-14:12:31-json.gz
+Path: /etc/rtslib-fb-target/backup/saveconfig-20260612-14:12:31-json.gz
+IQNs: iqn.2026-04.lab.local:lab.target01
+TPGTs: 1, LUNs: 10, Images: 10
+
+TPGTs
+IQN                                | TPGT   | LUNs | ACLs | ACL names
+-----------------------------------+--------+------+------+----------
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 10   | 0    | None
+
+LUNs
+IQN                                | TPGT   | LUN ID | LUN Name     | Storage Object
+-----------------------------------+--------+--------+--------------+--------------------------------
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 9      | pe_disk8     | /backstores/fileio/pe_disk8
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 8      | pe_disk7     | /backstores/fileio/pe_disk7
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 7      | pe_disk6     | /backstores/fileio/pe_disk6
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 6      | pe_disk5     | /backstores/fileio/pe_disk5
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 5      | pe_disk4     | /backstores/fileio/pe_disk4
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 4      | pe_disk3     | /backstores/fileio/pe_disk3
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 3      | pe_disk2     | /backstores/fileio/pe_disk2
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 2      | pe_disk1     | /backstores/fileio/pe_disk1
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 1      | rootfs_disk2 | /backstores/fileio/rootfs_disk2
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 0      | rootfs_disk1 | /backstores/fileio/rootfs_disk1
+
+Images
+Image Name       | Type   | udev_path
+-----------------+--------+--------------------------------------
+pe_disk8.img     | pe     | /var/lib/iscsi_disks/pe_disk8.img
+pe_disk7.img     | pe     | /var/lib/iscsi_disks/pe_disk7.img
+pe_disk6.img     | pe     | /var/lib/iscsi_disks/pe_disk6.img
+pe_disk5.img     | pe     | /var/lib/iscsi_disks/pe_disk5.img
+pe_disk4.img     | pe     | /var/lib/iscsi_disks/pe_disk4.img
+pe_disk3.img     | pe     | /var/lib/iscsi_disks/pe_disk3.img
+pe_disk2.img     | pe     | /var/lib/iscsi_disks/pe_disk2.img
+pe_disk1.img     | pe     | /var/lib/iscsi_disks/pe_disk1.img
+rootfs_disk2.img | rootfs | /var/lib/iscsi_disks/rootfs_disk2.img
+rootfs_disk1.img | rootfs | /var/lib/iscsi_disks/rootfs_disk1.img
+
+Node: ncn-w002
+Role: target
+Config file: saveconfig.json
+Path: /etc/rtslib-fb-target/saveconfig.json
+IQNs: iqn.2026-04.lab.local:lab.ncn-w002
+TPGTs: 1, LUNs: 10, Images: 10
+
+TPGTs
+IQN                                | TPGT   | LUNs | ACLs | ACL names
+-----------------------------------+--------+------+------+----------
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 10   | 0    | None
+
+LUNs
+IQN                                | TPGT   | LUN ID | LUN Name      | Storage Object
+-----------------------------------+--------+--------+---------------+---------------------------------
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 9      | image8_pe     | /backstores/fileio/image8_pe
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 8      | image7_pe     | /backstores/fileio/image7_pe
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 7      | image6_pe     | /backstores/fileio/image6_pe
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 6      | image5_pe     | /backstores/fileio/image5_pe
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 5      | image4_pe     | /backstores/fileio/image4_pe
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 4      | image3_pe     | /backstores/fileio/image3_pe
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 3      | image2_pe     | /backstores/fileio/image2_pe
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 2      | image1_pe     | /backstores/fileio/image1_pe
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 1      | image2_rootfs | /backstores/fileio/image2_rootfs
+iqn.2026-04.lab.local:lab.ncn-w002 | tpgt_1 | 0      | image1_rootfs | /backstores/fileio/image1_rootfs
+
+Images
+Image Name    | Type   | udev_path
+--------------+--------+---------------------------------------------
+image8_pe     | pe     | /var/lib/cps-local/boot-images/image8_pe
+image7_pe     | pe     | /var/lib/cps-local/boot-images/image7_pe
+image6_pe     | pe     | /var/lib/cps-local/boot-images/image6_pe
+image5_pe     | pe     | /var/lib/cps-local/boot-images/image5_pe
+image4_pe     | pe     | /var/lib/cps-local/boot-images/image4_pe
+image3_pe     | pe     | /var/lib/cps-local/boot-images/image3_pe
+image2_pe     | pe     | /var/lib/cps-local/boot-images/image2_pe
+image1_pe     | pe     | /var/lib/cps-local/boot-images/image1_pe
+image2_rootfs | rootfs | /var/lib/cps-local/boot-images/image2_rootfs
+image1_rootfs | rootfs | /var/lib/cps-local/boot-images/image1_rootfs
+```
+
+#### iscsi describe config --node \<node-name\>
+
+```bash
+iscsi describe config --node ncn-w001
+```
+
+```text
+Node: ncn-w001
+Role: target
+Config file: saveconfig-20260616-13:56:56-json.gz
+Path: /etc/rtslib-fb-target/backup/saveconfig-20260616-13:56:56-json.gz
+IQNs: iqn.2026-04.lab.local:lab.target01
+TPGTs: 1, LUNs: 10, Images: 10
+
+TPGTs
+IQN                                | TPGT   | LUNs | ACLs | ACL names
+-----------------------------------+--------+------+------+----------
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 10   | 0    | None
+
+LUNs
+IQN                                | TPGT   | LUN ID | LUN Name      | Storage Object
+-----------------------------------+--------+--------+---------------+---------------------------------
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 9      | image8_pe     | /backstores/fileio/image8_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 8      | image7_pe     | /backstores/fileio/image7_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 7      | image6_pe     | /backstores/fileio/image6_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 6      | image5_pe     | /backstores/fileio/image5_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 5      | image4_pe     | /backstores/fileio/image4_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 4      | image3_pe     | /backstores/fileio/image3_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 3      | image2_pe     | /backstores/fileio/image2_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 2      | image1_pe     | /backstores/fileio/image1_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 1      | image2_rootfs | /backstores/fileio/image2_rootfs
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 0      | image1_rootfs | /backstores/fileio/image1_rootfs
+
+Images
+Image Name    | Type   | udev_path
+--------------+--------+---------------------------------------------
+image8_pe.img | pe     | /var/lib/cps-local/boot_images/image8_pe.img
+image7_pe.img | pe     | /var/lib/cps-local/boot_images/image7_pe.img
+image6_pe.img | pe     | /var/lib/cps-local/boot_images/image6_pe.img
+image5_pe.img | pe     | /var/lib/cps-local/boot_images/image5_pe.img
+image4_pe.img | pe     | /var/lib/cps-local/boot_images/image4_pe.img
+image3_pe.img | pe     | /var/lib/cps-local/boot_images/image3_pe.img
+image2_pe.img | pe     | /var/lib/cps-local/boot_images/image2_pe.img
+image1_pe.img | pe     | /var/lib/cps-local/boot_images/image1_pe.img
+image2_rootfs | rootfs | /var/lib/cps-local/boot_images/image2_rootfs
+image1_rootfs | rootfs | /var/lib/cps-local/boot_images/image1_rootfs
+
+Node: ncn-w001
+Role: target
+Config file: saveconfig-20260616-13:06:20-json.gz
+Path: /etc/rtslib-fb-target/backup/saveconfig-20260616-13:06:20-json.gz
+IQNs: iqn.2026-04.lab.local:lab.target01
+TPGTs: 1, LUNs: 10, Images: 10
+
+TPGTs
+IQN                                | TPGT   | LUNs | ACLs | ACL names
+-----------------------------------+--------+------+------+----------
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 10   | 0    | None
+
+LUNs
+IQN                                | TPGT   | LUN ID | LUN Name      | Storage Object
+-----------------------------------+--------+--------+---------------+---------------------------------
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 0      | image1_rootfs | /backstores/fileio/image1_rootfs
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 1      | image2_rootfs | /backstores/fileio/image2_rootfs
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 2      | image1_pe     | /backstores/fileio/image1_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 3      | image2_pe     | /backstores/fileio/image2_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 4      | image3_pe     | /backstores/fileio/image3_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 5      | image4_pe     | /backstores/fileio/image4_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 6      | image5_pe     | /backstores/fileio/image5_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 7      | image6_pe     | /backstores/fileio/image6_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 8      | image7_pe     | /backstores/fileio/image7_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 9      | image8_pe     | /backstores/fileio/image8_pe
+
+Images
+Image Name    | Type   | udev_path
+--------------+--------+---------------------------------------------
+image1_rootfs | rootfs | /var/lib/cps-local/boot_images/image1_rootfs
+image2_rootfs | rootfs | /var/lib/cps-local/boot_images/image2_rootfs
+image1_pe.img | pe     | /var/lib/cps-local/boot_images/image1_pe.img
+image2_pe.img | pe     | /var/lib/cps-local/boot_images/image2_pe.img
+image3_pe.img | pe     | /var/lib/cps-local/boot_images/image3_pe.img
+image4_pe.img | pe     | /var/lib/cps-local/boot_images/image4_pe.img
+image5_pe.img | pe     | /var/lib/cps-local/boot_images/image5_pe.img
+image6_pe.img | pe     | /var/lib/cps-local/boot_images/image6_pe.img
+image7_pe.img | pe     | /var/lib/cps-local/boot_images/image7_pe.img
+image8_pe.img | pe     | /var/lib/cps-local/boot_images/image8_pe.img
+
+Node: ncn-w001
+Role: target
+Config file: saveconfig-20260615-15:17:31-json.gz
+Path: /etc/rtslib-fb-target/backup/saveconfig-20260615-15:17:31-json.gz
+IQNs: iqn.2026-04.lab.local:lab.target01
+TPGTs: 1, LUNs: 10, Images: 10
+
+TPGTs
+IQN                                | TPGT   | LUNs | ACLs | ACL names
+-----------------------------------+--------+------+------+----------
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 10   | 0    | None
+
+LUNs
+IQN                                | TPGT   | LUN ID | LUN Name      | Storage Object
+-----------------------------------+--------+--------+---------------+---------------------------------
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 9      | image8_pe     | /backstores/fileio/image8_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 8      | image7_pe     | /backstores/fileio/image7_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 7      | image6_pe     | /backstores/fileio/image6_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 6      | image5_pe     | /backstores/fileio/image5_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 5      | image4_pe     | /backstores/fileio/image4_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 4      | image3_pe     | /backstores/fileio/image3_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 3      | image2_pe     | /backstores/fileio/image2_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 2      | image1_pe     | /backstores/fileio/image1_pe
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 1      | image2_rootfs | /backstores/fileio/image2_rootfs
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 0      | image1_rootfs | /backstores/fileio/image1_rootfs
+
+Images
+Image Name    | Type   | udev_path
+--------------+--------+---------------------------------------------
+image8_pe.img | pe     | /var/lib/cps-local/boot_images/image8_pe.img
+image7_pe.img | pe     | /var/lib/cps-local/boot_images/image7_pe.img
+image6_pe.img | pe     | /var/lib/cps-local/boot_images/image6_pe.img
+image5_pe.img | pe     | /var/lib/cps-local/boot_images/image5_pe.img
+image4_pe.img | pe     | /var/lib/cps-local/boot_images/image4_pe.img
+image3_pe.img | pe     | /var/lib/cps-local/boot_images/image3_pe.img
+image2_pe.img | pe     | /var/lib/cps-local/boot_images/image2_pe.img
+image1_pe.img | pe     | /var/lib/cps-local/boot_images/image1_pe.img
+image2_rootfs | rootfs | /var/lib/cps-local/boot_images/image2_rootfs
+image1_rootfs | rootfs | /var/lib/cps-local/boot_images/image1_rootfs
+
+Node: ncn-w001
+Role: target
+Config file: saveconfig-20260612-14:10:15-json.gz
+Path: /etc/rtslib-fb-target/backup/saveconfig-20260612-14:10:15-json.gz
+IQNs: iqn.2026-04.lab.local:lab.target01
+TPGTs: 1, LUNs: 10, Images: 10
+
+TPGTs
+IQN                                | TPGT   | LUNs | ACLs | ACL names
+-----------------------------------+--------+------+------+----------
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 10   | 0    | None
+
+LUNs
+IQN                                | TPGT   | LUN ID | LUN Name     | Storage Object
+-----------------------------------+--------+--------+--------------+--------------------------------
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 9      | pe_disk8     | /backstores/fileio/pe_disk8
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 8      | pe_disk7     | /backstores/fileio/pe_disk7
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 7      | pe_disk6     | /backstores/fileio/pe_disk6
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 6      | pe_disk5     | /backstores/fileio/pe_disk5
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 5      | pe_disk4     | /backstores/fileio/pe_disk4
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 4      | pe_disk3     | /backstores/fileio/pe_disk3
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 3      | pe_disk2     | /backstores/fileio/pe_disk2
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 2      | pe_disk1     | /backstores/fileio/pe_disk1
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 1      | rootfs_disk2 | /backstores/fileio/rootfs_disk2
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 0      | rootfs_disk1 | /backstores/fileio/rootfs_disk1
+
+Images
+Image Name       | Type   | udev_path
+-----------------+--------+--------------------------------------
+pe_disk8.img     | pe     | /var/lib/iscsi_disks/pe_disk8.img
+pe_disk7.img     | pe     | /var/lib/iscsi_disks/pe_disk7.img
+pe_disk6.img     | pe     | /var/lib/iscsi_disks/pe_disk6.img
+pe_disk5.img     | pe     | /var/lib/iscsi_disks/pe_disk5.img
+pe_disk4.img     | pe     | /var/lib/iscsi_disks/pe_disk4.img
+pe_disk3.img     | pe     | /var/lib/iscsi_disks/pe_disk3.img
+pe_disk2.img     | pe     | /var/lib/iscsi_disks/pe_disk2.img
+pe_disk1.img     | pe     | /var/lib/iscsi_disks/pe_disk1.img
+rootfs_disk2.img | rootfs | /var/lib/iscsi_disks/rootfs_disk2.img
+rootfs_disk1.img | rootfs | /var/lib/iscsi_disks/rootfs_disk1.img
+
+Node: ncn-w001
+Role: target
+Config file: saveconfig.json
+Path: /etc/rtslib-fb-target/saveconfig.json
+IQNs: iqn.2026-04.lab.local:lab.ncn-w001
+TPGTs: 1, LUNs: 10, Images: 10
+
+TPGTs
+IQN                                | TPGT   | LUNs | ACLs | ACL names
+-----------------------------------+--------+------+------+----------
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 10   | 0    | None
+
+LUNs
+IQN                                | TPGT   | LUN ID | LUN Name      | Storage Object
+-----------------------------------+--------+--------+---------------+---------------------------------
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 9      | image8_pe     | /backstores/fileio/image8_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 8      | image7_pe     | /backstores/fileio/image7_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 7      | image6_pe     | /backstores/fileio/image6_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 6      | image5_pe     | /backstores/fileio/image5_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 5      | image4_pe     | /backstores/fileio/image4_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 4      | image3_pe     | /backstores/fileio/image3_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 3      | image2_pe     | /backstores/fileio/image2_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 2      | image1_pe     | /backstores/fileio/image1_pe
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 1      | image2_rootfs | /backstores/fileio/image2_rootfs
+iqn.2026-04.lab.local:lab.ncn-w001 | tpgt_1 | 0      | image1_rootfs | /backstores/fileio/image1_rootfs
+
+Images
+Image Name    | Type   | udev_path
+--------------+--------+---------------------------------------------
+image8_pe     | pe     | /var/lib/cps-local/boot-images/image8_pe
+image7_pe     | pe     | /var/lib/cps-local/boot-images/image7_pe
+image6_pe     | pe     | /var/lib/cps-local/boot-images/image6_pe
+image5_pe     | pe     | /var/lib/cps-local/boot-images/image5_pe
+image4_pe     | pe     | /var/lib/cps-local/boot-images/image4_pe
+image3_pe     | pe     | /var/lib/cps-local/boot-images/image3_pe
+image2_pe     | pe     | /var/lib/cps-local/boot-images/image2_pe
+image1_pe     | pe     | /var/lib/cps-local/boot-images/image1_pe
+image2_rootfs | rootfs | /var/lib/cps-local/boot-images/image2_rootfs
+image1_rootfs | rootfs | /var/lib/cps-local/boot-images/image1_rootfs
+```
 
 ##### iscsi describe config --node \<node-name\> --file-path \<path\>
 
@@ -1714,35 +2869,51 @@ iscsi describe config --node ncn-w001 --file-path /etc/target/backup/saveconfig-
 ```text
 Node: ncn-w001
 Role: target
+Config file: saveconfig-20260612-14:10:15-json.gz
+Path: /etc/rtslib-fb-target/backup/saveconfig-20260612-14:10:15-json.gz
 IQNs: iqn.2026-04.lab.local:lab.target01
 TPGTs: 1, LUNs: 10, Images: 10
 
 TPGTs
-IQN                                | TPGT | LUNs | ACLs | ACL names
------------------------------------+------+------+------+----------
-iqn.2026-04.lab.local:lab.target01 | 1    | 10   | 0    | None
+IQN                                | TPGT   | LUNs | ACLs | ACL names
+-----------------------------------+--------+------+------+----------
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 10   | 0    | None
 
-LUNs and images
-IQN                                | TPGT | LUN | Type   | Image
------------------------------------+------+-----+--------+-------------
-iqn.2026-04.lab.local:lab.target01 | 1    | 9   | pe     | pe_disk8
-iqn.2026-04.lab.local:lab.target01 | 1    | 8   | pe     | pe_disk7
-iqn.2026-04.lab.local:lab.target01 | 1    | 7   | pe     | pe_disk6
-iqn.2026-04.lab.local:lab.target01 | 1    | 6   | pe     | pe_disk5
-iqn.2026-04.lab.local:lab.target01 | 1    | 5   | pe     | pe_disk4
-iqn.2026-04.lab.local:lab.target01 | 1    | 4   | pe     | pe_disk3
-iqn.2026-04.lab.local:lab.target01 | 1    | 3   | pe     | pe_disk2
-iqn.2026-04.lab.local:lab.target01 | 1    | 2   | pe     | pe_disk1
-iqn.2026-04.lab.local:lab.target01 | 1    | 1   | rootfs | rootfs_disk2
-iqn.2026-04.lab.local:lab.target01 | 1    | 0   | rootfs | rootfs_disk1
+LUNs
+IQN                                | TPGT   | LUN ID | LUN Name     | Storage Object
+-----------------------------------+--------+--------+--------------+--------------------------------
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 9      | pe_disk8     | /backstores/fileio/pe_disk8
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 8      | pe_disk7     | /backstores/fileio/pe_disk7
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 7      | pe_disk6     | /backstores/fileio/pe_disk6
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 6      | pe_disk5     | /backstores/fileio/pe_disk5
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 5      | pe_disk4     | /backstores/fileio/pe_disk4
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 4      | pe_disk3     | /backstores/fileio/pe_disk3
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 3      | pe_disk2     | /backstores/fileio/pe_disk2
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 2      | pe_disk1     | /backstores/fileio/pe_disk1
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 1      | rootfs_disk2 | /backstores/fileio/rootfs_disk2
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | 0      | rootfs_disk1 | /backstores/fileio/rootfs_disk1
+
+Images
+Image Name       | Type   | udev_path
+-----------------+--------+--------------------------------------
+pe_disk8.img     | pe     | /var/lib/iscsi_disks/pe_disk8.img
+pe_disk7.img     | pe     | /var/lib/iscsi_disks/pe_disk7.img
+pe_disk6.img     | pe     | /var/lib/iscsi_disks/pe_disk6.img
+pe_disk5.img     | pe     | /var/lib/iscsi_disks/pe_disk5.img
+pe_disk4.img     | pe     | /var/lib/iscsi_disks/pe_disk4.img
+pe_disk3.img     | pe     | /var/lib/iscsi_disks/pe_disk3.img
+pe_disk2.img     | pe     | /var/lib/iscsi_disks/pe_disk2.img
+pe_disk1.img     | pe     | /var/lib/iscsi_disks/pe_disk1.img
+rootfs_disk2.img | rootfs | /var/lib/iscsi_disks/rootfs_disk2.img
+rootfs_disk1.img | rootfs | /var/lib/iscsi_disks/rootfs_disk1.img
 ```
 
 ##### iscsi describe config --node \<node-name\> --file-path \<path\> --out-file \<filename\>
 
 ```bash
-iscsi describe config --node ncn-w001 --file-path /etc/target/saveconfig.json --out-file iscsi-output.txt
+iscsi describe config --node ncn-w001 --file-path /etc/target/backup/saveconfig-20260612-14:10:15-json.gz --out-file iscsi-output.txt
 ```
 
 ```text
-[Output Placeholder]
+Output saved to iscsi-output.txt
 ```
