@@ -1,8 +1,6 @@
 from typing import List, Sequence
 from pathlib import Path
 
-DEFAULT_OUT_FILE = "iscsi-output.txt"
-
 
 def render_table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> str:
     widths = [len(header) for header in headers]
@@ -23,10 +21,12 @@ def render_table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> str:
 
 def emit_output(payload: dict, formatter=None, out_file: str = None) -> None:
     text = formatter(payload) if formatter else str(payload)
-    print(text)
-    path = out_file or DEFAULT_OUT_FILE
-    with open(path, "a") as f:
-        f.write(text + "\n")
+    if not out_file:
+        print(text)
+    else:
+        with open(out_file, "w") as f:
+            f.write(text + "\n")
+        print(f"Output saved to {out_file}")
 
 
 def format_nodes_output(payload: dict) -> str:
