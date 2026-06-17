@@ -66,131 +66,158 @@ def format_nodes_output(payload: dict) -> str:
     return "\n".join(lines)
 
 
-def format_target_summary(summary: dict) -> str:
-    lines = [
-        f"Node: {summary.get('node', 'unknown')}",
-        "Role: target",
-    ]
+def format_target_summary(summaries: list[dict]) -> str:
+    sections = []
 
-    with_metrics = summary.get("with_metrics", False)
-
-    lines.append(f"IQNs: {', '.join(summary.get('iqns', [])) or 'None'}")
-
-    lines.append(
-        f"TPGTs: {summary.get('tpgt_count', 0)}, "
-        f"LUNs: {summary.get('lun_count', 0)}, "
-        f"Images: {summary.get('total_active_images', 0)}"
-    )
-
-    if summary.get("errors"):
-        lines.append("Warnings:")
-        lines.extend(f"- {message}" for message in summary["errors"])
-
-    tpgts = summary.get("tpgts", [])
-    if tpgts:
-        lines.extend(
-            [
-                "",
-                "TPGTs",
-                render_table(
-                    [
-                        "IQN",
-                        "TPGT",
-                        "LUNs",
-                        "ACLs",
-                        "ACL names",
-                    ],
-                    [
-                        [
-                            tpgt["iqn"],
-                            tpgt["tpgt_name"],
-                            str(tpgt["lun_count"]),
-                            str(tpgt["acl_count"]),
-                            ", ".join(tpgt["acl_names"]) or "None",
-                        ]
-                        for tpgt in tpgts
-                    ],
-                ),
-            ]
-        )
-
-    images = summary.get("luns", summary.get("images", []))
-    if images:
-        headers = [
-            "IQN",
-            "TPGT",
-            "LUN",
-            "Type",
-            "Image",
+    for summary in summaries:
+        lines = [
+            f"Node: {summary.get('node', 'unknown')}",
+            "Role: target",
+            f"Config file: {summary.get('config_file', 'current configuration')}",
+            f"Path: {summary.get('file_path', 'N/A')}",
         ]
 
-        if with_metrics:
-            headers.extend(
+        with_metrics = summary.get("with_metrics", False)
+
+        lines.append(f"IQNs: {', '.join(summary.get('iqns', [])) or 'None'}")
+
+        lines.append(
+            f"TPGTs: {summary.get('tpgt_count', 0)}, "
+            f"LUNs: {summary.get('lun_count', 0)}, "
+            f"Images: {summary.get('total_active_images', 0)}"
+        )
+
+        if summary.get("errors"):
+            lines.append("Warnings:")
+            lines.extend(f"- {message}" for message in summary["errors"])
+
+        tpgts = summary.get("tpgts", [])
+        if tpgts:
+            lines.extend(
                 [
-                    "Read MBytes",
-                    "Read IOPs",
+                    "",
+                    "TPGTs",
+                    render_table(
+                        [
+                            "IQN",
+                            "TPGT",
+                            "LUNs",
+                            "ACLs",
+                            "ACL names",
+                        ],
+                        [
+                            [
+                                tpgt["iqn"],
+                                tpgt["tpgt_name"],
+                                str(tpgt["lun_count"]),
+                                str(tpgt["acl_count"]),
+                                ", ".join(tpgt["acl_names"]) or "None",
+                            ]
+                            for tpgt in tpgts
+                        ],
+                    ),
                 ]
             )
 
-        rows = []
-
-        for lun in images:
-            tpgt = lun.get("tpgt", {})
-            image = lun.get("image", {})
-            row = [
-                tpgt.get("iqn", ""),
-                tpgt.get("tpgt_name", ""),
-                str(lun.get("lun_id", "")),
-                image.get("image_type", ""),
-                image.get("image_name", ""),
+        images = summary.get("luns", summary.get("images", []))
+        if images:
+            headers = [
+                "IQN",
+                "TPGT",
+                "LUN",
+                "Type",
+                "Image",
             ]
 
             if with_metrics:
-                row.extend(
+                headers.extend(
                     [
-                        str(lun.get("read_mbytes", 0)),
-                        str(lun.get("read_iops", 0)),
+                        "Read MBytes",
+                        "Read IOPs",
                     ]
                 )
 
-            rows.append(row)
+            rows = []
 
-        lines.extend(
-            [
-                "",
-                "LUNs and images",
-                render_table(headers, rows),
-            ]
-        )
+            for lun in images:
+                tpgt = lun.get("tpgt", {})
+                image = lun.get("image", {})
 
-    return "\n".join(lines)
+                row = [
+                    tpgt.get("iqn", ""),
+                    tpgt.get("tpgt_name", ""),
+                    str(lun.get("lun_id", "")),
+                    image.get("image_type", ""),
+                    image.get("image_name", ""),
+                ]
+
+                if with_metrics:
+                    row.extend(
+                        [
+                            str(lun.get("read_mbytes", 0)),
+                            str(lun.get("read_iops", 0)),
+                        ]
+                    )
+
+                rows.append(row)
+
+            lines.extend(
+                [
+                    "",
+                    "LUNs and images",
+                    render_table(headers, rows),
+                ]
+            )
+
+        sections.append("\n".join(lines))
+
+    return "\n\n".join(sections)
 
 
-def format_initiator_summary(summary: dict) -> str:
-    lines = [
-        f"Node: {summary.get('node', 'unknown')}",
-        "Role: initiator",
-        (
-            f"Sessions: {summary.get('sessions', 0)}, "
-            f"Total mounts: {summary.get('total', 0)}, "
-            f"Mounted: {summary.get('mounted', 0)}, "
-            f"Unmounted: {summary.get('unmounted', 0)}"
-        ),
-    ]
+def format_initiator_summary(summaries: list[dict]) -> str:
+    sections = []
 
-    session_details = summary.get("session_details", [])
+    for summary in summaries:
+        lines = [
+            f"Node: {summary.get('node', 'unknown')}",
+            "Role: initiator",
+            (
+                f"Sessions: {summary.get('sessions', 0)}, "
+                f"Total mounts: {summary.get('total', 0)}, "
+                f"Mounted: {summary.get('mounted', 0)}, "
+                f"Unmounted: {summary.get('unmounted', 0)}"
+            ),
+        ]
 
-    if session_details:
-        lines.append("")
-        lines.append("Session details:")
-        lines.extend(f"- {detail}" for detail in session_details)
+        session_details = summary.get("session_details", [])
 
-    if summary.get("errors"):
-        lines.append("")
-        lines.append("Warnings:")
-        lines.extend(f"- {message}" for message in summary["errors"])
+        if session_details:
+            lines.extend(["", "Session details:"])
 
-    return "\n".join(lines)
+            for session in session_details:
+                target = session.get("target", "unknown")
+                portal = session.get("portal", "unknown")
+                state = session.get("session_state", "unknown")
+                device_count = len(session.get("devices", []))
+
+                lines.append(
+                    f"- {target} | Portal: {portal} | "
+                    f"State: {state} | Devices: {device_count}"
+                )
+
+        if summary.get("errors"):
+            lines.extend(["", "Warnings:"])
+            lines.extend(f"- {message}" for message in summary["errors"])
+
+        sections.append("\n".join(lines))
+
+    return "\n\n".join(sections)
+
+
+def format_both_summaries(summaries: tuple[list[dict], list[dict]]) -> str:
+    target_summary_str = format_target_summary(summaries[0])
+    initiator_summary_str = format_initiator_summary(summaries[1])
+    return "\n\n".join([target_summary_str, initiator_summary_str])
 
 
 def format_luns_output(payload: dict) -> str:
@@ -552,22 +579,39 @@ def format_initiator_metrics(summaries: list[dict]) -> str:
         session_details = summary.get("session_details", [])
 
         if session_details:
-            lines.append("")
-            lines.append("Session Details")
+            lines.extend(["", "Session Details"])
 
-            for detail in session_details:
-                lines.append(f"- {detail}")
+            for session in session_details:
+                lines.extend(
+                    [
+                        "",
+                        f"Target: {session.get('target', 'unknown')}",
+                        f"  Portal: {session.get('portal', 'unknown')}",
+                        f"  SID: {session.get('sid', 'unknown')}",
+                        f"  Connection State: {session.get('connection_state', 'unknown')}",
+                        f"  Session State: {session.get('session_state', 'unknown')}",
+                        f"  Host Number: {session.get('host_number', 'unknown')}",
+                    ]
+                )
+
+                devices = session.get("devices", [])
+                if devices:
+                    lines.append("  Devices:")
+
+                    for device in devices:
+                        lines.append(
+                            f"    LUN {device.get('lun', '?')}: {device.get('disk', '?')}"
+                        )
 
         if summary.get("errors"):
-            lines.append("")
-            lines.append("Warnings")
+            lines.extend(["", "Warnings"])
 
             for error in summary["errors"]:
                 lines.append(f"- {error}")
 
         sections.append("\n".join(lines))
 
-    return ("\n\n").join(sections)
+    return "\n\n".join(sections)
 
 
 def format_both_metrics(summaries: tuple[list[dict], list[dict]]) -> str:

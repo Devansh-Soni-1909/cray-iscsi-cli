@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from typing import List, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -73,7 +74,7 @@ def collect_initiator_metrics(node: str) -> dict:
     sessions = len([line for line in session_lines if line.strip()])
 
     try:
-        session_details_output = run_pdsh_text(
+        details_output = run_pdsh_text(
             f'pdsh -w {node} "sudo iscsiadm -m session -P 3 2>/dev/null || true"'
         )
     except Exception as session_details_error:
@@ -81,9 +82,56 @@ def collect_initiator_metrics(node: str) -> dict:
             node, f"Unable to collect session details: {session_details_error}"
         )
 
-    session_details = [
-        line for line in session_details_output.splitlines() if line.strip()
-    ]
+    session_details = []
+    current = None
+
+    for line in details_output.splitlines():
+        line = line.strip()
+        if line.startswith("Target:"):
+            if current:
+                current["lun_count"] = len(current["devices"])
+                session_details.append(current)
+
+            target = line[len("Target:") :].split(" (")[0].strip()
+
+            current = {
+                "target": target,
+                "portal": "",
+                "sid": "",
+                "connection_state": "",
+                "session_state": "",
+                "host": "",
+                "devices": [],
+            }
+
+        elif current is None:
+            continue
+
+        elif line.startswith("Current Portal:"):
+            current["portal"] = line.split(":", 1)[1].strip()
+
+        elif line.startswith("SID:"):
+            current["sid"] = line.split(":", 1)[1].strip()
+
+        elif line.startswith("iSCSI Connection State:"):
+            current["connection_state"] = line.split(":", 1)[1].strip()
+
+        elif line.startswith("iSCSI Session State:"):
+            current["session_state"] = line.split(":", 1)[1].strip()
+
+        elif line.startswith("Host Number:"):
+            match = re.search(r"Host Number:\s*(\d+)", line)
+            if match:
+                current["host"] = match.group(1)
+
+        elif "Attached scsi disk" in line:
+            match = re.search(r"Attached scsi disk\s+(\S+)", line)
+            if match:
+                current["devices"].append(match.group(1))
+
+    if current:
+        current["lun_count"] = len(current["devices"])
+        session_details.append(current)
 
     return {
         "total": total,

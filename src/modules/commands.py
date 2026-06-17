@@ -47,6 +47,7 @@ from .formatter import (
     format_error_summary,
     format_target_summary,
     format_initiator_summary,
+    format_both_summaries,
     format_target_metrics,
     format_initiator_metrics,
     format_both_metrics,
@@ -371,17 +372,32 @@ def cmd_describe_node(args) -> None:
         if role == "initiator":
             summary = build_initiator_node_summary(node_name)
             emit_output(
-                summary, formatter=format_initiator_summary, out_file=args.out_file
+                [summary], formatter=format_initiator_summary, out_file=args.out_file
             )
         elif role == "target":
             summary = build_target_node_summary(node_name, with_metrics=False)
             emit_output(
-                summary, formatter=format_target_summary, out_file=args.out_file
+                [summary], formatter=format_target_summary, out_file=args.out_file
             )
         else:
             raise CLIParameterError(f"{node_name}: unknown role, cannot describe")
     else:
-        raise CLIParameterError("Provide the node name with --name flag")
+        target_nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
+        with ThreadPoolExecutor(max_workers=min(32, len(target_nodes))) as executor:
+            target_summaries = list(
+                executor.map(build_target_node_summary, target_nodes)
+            )
+
+        initiator_nodes = get_kubernetes_nodes(DEFAULT_INITIATOR_SELECTOR)
+        with ThreadPoolExecutor(max_workers=min(32, len(initiator_nodes))) as executor:
+            initiator_summaries = list(
+                executor.map(build_initiator_node_summary, initiator_nodes)
+            )
+        emit_output(
+            payload=(target_summaries, initiator_summaries),
+            formatter=format_both_summaries,
+            out_file=args.out_file,
+        )
 
 
 def cmd_describe_config(args) -> None:
@@ -393,11 +409,32 @@ def cmd_describe_config(args) -> None:
                     args.node, f"Error describing config {args.file_path}: {error}"
                 )
             emit_output(
-                payload, formatter=format_target_summary, out_file=args.out_file
+                [payload], formatter=format_target_summary, out_file=args.out_file
             )
         else:
-            raise CLIParameterError(
-                "Please provide configuration file path with --file-path flag"
+            current, versions = list_config_versions(args.node)
+            version_paths = [version[0] for version in versions]
+            version_paths.append(current)
+            print(version_paths)
+            with ThreadPoolExecutor(max_workers=min(32, len(versions))) as executor:
+                results = list(
+                    executor.map(
+                        build_backup_config_summary,
+                        [args.node] * len(version_paths),
+                        version_paths,
+                    )
+                )
+            config_summaries = []
+            for summary, error in results:
+                if error:
+                    raise TargetConfigurationError(
+                        args.node, f"Error describing config: {error}"
+                    )
+                config_summaries.append(summary)
+            emit_output(
+                config_summaries,
+                formatter=format_target_summary,
+                out_file=args.out_file,
             )
     else:
         raise CLIParameterError("Please provide a node name with --node flag")
