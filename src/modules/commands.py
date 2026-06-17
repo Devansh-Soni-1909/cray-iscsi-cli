@@ -436,5 +436,36 @@ def cmd_describe_config(args) -> None:
                 formatter=format_target_summary,
                 out_file=args.out_file,
             )
+    elif args.file_path:
+        raise CLIParameterError("Please provide the node name with --node flag")
     else:
-        raise CLIParameterError("Please provide a node name with --node flag")
+        nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
+        jobs = []
+        for node in nodes:
+            current, versions = list_config_versions(node)
+            version_paths = [version[0] for version in versions]
+            version_paths.append(current)
+            jobs.extend((node, path) for path in version_paths)
+
+        with ThreadPoolExecutor(max_workers=min(32, len(jobs))) as executor:
+            results = list(
+                executor.map(
+                    lambda job: build_backup_config_summary(*job),
+                    jobs,
+                )
+            )
+
+        config_summaries = []
+        for summary, error in results:
+            if error:
+                raise TargetConfigurationError(
+                    summary.get("node", "unknown") if summary else "unknown",
+                    f"Error describing config: {error}",
+                )
+
+            config_summaries.append(summary)
+        emit_output(
+            config_summaries,
+            formatter=format_target_summary,
+            out_file=args.out_file,
+        )
