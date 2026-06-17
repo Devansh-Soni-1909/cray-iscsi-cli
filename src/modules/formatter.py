@@ -19,7 +19,11 @@ def render_table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> str:
     return "\n".join(lines)
 
 
-def emit_output(payload: dict, formatter=None, out_file: str = None) -> None:
+def emit_output(
+    payload: dict | list[dict] | tuple[list[dict], list[dict]],
+    formatter=None,
+    out_file: str = None,
+) -> None:
     text = formatter(payload) if formatter else str(payload)
     if not out_file:
         print(text)
@@ -201,7 +205,15 @@ def format_luns_output(payload: dict) -> str:
         lines.append(f"LUNs: {payload.get('count', len(luns))}")
         if luns:
             with_metrics = payload.get("with_metrics", False)
-            headers = ["IQN", "TPGT", "LUN ID", "LUN Name", "Type", "Image", "udev_path"]
+            headers = [
+                "IQN",
+                "TPGT",
+                "LUN ID",
+                "LUN Name",
+                "Type",
+                "Image",
+                "udev_path",
+            ]
             if with_metrics:
                 headers.extend(["Read MBytes", "Read IOPs"])
             rows = []
@@ -379,173 +391,189 @@ def format_mount_status_output(payload: dict) -> str:
     return _format_initiator_mount_status_summary(payload)
 
 
-def format_target_metrics(summary: dict) -> str:
-    lines = [
-        f"Node: {summary.get('node', 'unknown')}",
-        "Role: target",
-        "",
-        (
-            f"TPGTs: {summary.get('tpgt_count', 0)}, "
-            f"LUNs: {summary.get('lun_count', 0)}"
-        ),
-    ]
+def format_target_metrics(summaries: list[dict]) -> str:
+    sections = []
 
-    lines.append("")
-    lines.append("Image Summary")
-    lines.append(
-        render_table(
-            ["Total Images", "RootFS", "PE", "Unknown"],
-            [
-                [
-                    str(summary.get("total_active_images", 0)),
-                    str(summary.get("rootfs_count", 0)),
-                    str(summary.get("pe_count", 0)),
-                    str(summary.get("unknown_count", 0)),
-                ]
-            ],
-        )
-    )
-    lines.append("")
-    lines.append("LUN read metrics")
-
-    images = summary.get("luns", summary.get("images", []))
-    if images:
-        rows = [
-            [
-                lun.get("tpgt", {}).get("iqn", ""),
-                lun.get("tpgt", {}).get("tpgt_name", ""),
-                str(lun.get("lun_id", "")),
-                lun.get("image", {}).get("image_name", ""),
-                str(lun.get("read_mbytes", 0)),
-                str(lun.get("read_iops", 0)),
-            ]
-            for lun in images
+    for summary in summaries:
+        lines = [
+            f"Node: {summary.get('node', 'unknown')}",
+            "Role: target",
+            "",
+            (
+                f"TPGTs: {summary.get('tpgt_count', 0)}, "
+                f"LUNs: {summary.get('lun_count', 0)}"
+            ),
         ]
 
-        lines.append(
-            render_table(
-                [
-                    "IQN",
-                    "TPGT",
-                    "LUN",
-                    "Image",
-                    "Read MBytes",
-                    "Read IOPs",
-                ],
-                rows,
-            )
-        )
-    else:
-        lines.append("No LUN metrics found.")
-
-    deleted_images = summary.get("deleted_images", [])
-
-    lines.append("")
-    lines.append("Removed images since backup comparison")
-
-    if deleted_images:
-        rows = [
-            [
-                row.get("type", "unknown"),
-                row.get("image_name", "-"),
-                row.get("path", "-"),
-            ]
-            for row in deleted_images
-        ]
-
-        lines.append(
-            render_table(
-                ["Type", "Image", "Path"],
-                rows,
-            )
-        )
-
-        comparison_source = summary.get("comparison_source")
-
-        if comparison_source:
-            lines.append("")
-            lines.append("Comparison source")
-            lines.append(comparison_source)
-    else:
-        lines.append("None")
-
-    comparison_summary = summary.get("comparison_summary")
-
-    if comparison_summary:
         lines.append("")
-        lines.append("Snapshot change summary")
-
+        lines.append("Image Summary")
         lines.append(
             render_table(
-                [
-                    "IQNs +",
-                    "IQNs -",
-                    "TPGTs +",
-                    "TPGTs -",
-                    "LUNs +",
-                    "LUNs -",
-                    "ACLs +",
-                    "ACLs -",
-                    "Storage +",
-                    "Storage -",
-                    "Rootfs -",
-                    "PE -",
-                ],
+                ["Total Images", "RootFS", "PE", "Unknown"],
                 [
                     [
-                        str(comparison_summary.get("iqns_added", 0)),
-                        str(comparison_summary.get("iqns_removed", 0)),
-                        str(comparison_summary.get("tpgs_added", 0)),
-                        str(comparison_summary.get("tpgs_removed", 0)),
-                        str(comparison_summary.get("luns_added", 0)),
-                        str(comparison_summary.get("luns_removed", 0)),
-                        str(comparison_summary.get("acls_added", 0)),
-                        str(comparison_summary.get("acls_removed", 0)),
-                        str(comparison_summary.get("storage_objects_added", 0)),
-                        str(comparison_summary.get("storage_objects_removed", 0)),
-                        str(comparison_summary.get("rootfs_deleted", 0)),
-                        str(comparison_summary.get("pe_deleted", 0)),
+                        str(summary.get("total_active_images", 0)),
+                        str(summary.get("rootfs_count", 0)),
+                        str(summary.get("pe_count", 0)),
+                        str(summary.get("unknown_count", 0)),
                     ]
                 ],
             )
         )
 
-    if summary.get("errors"):
         lines.append("")
-        lines.append("Warnings")
-        lines.extend(f"- {error}" for error in summary["errors"])
+        lines.append("LUN read metrics")
 
-    return "\n".join(lines)
+        images = summary.get("luns", summary.get("images", []))
+        if images:
+            rows = [
+                [
+                    lun.get("tpgt", {}).get("iqn", ""),
+                    lun.get("tpgt", {}).get("tpgt_name", ""),
+                    str(lun.get("lun_id", "")),
+                    lun.get("image", {}).get("image_name", ""),
+                    str(lun.get("read_mbytes", 0)),
+                    str(lun.get("read_iops", 0)),
+                ]
+                for lun in images
+            ]
 
+            lines.append(
+                render_table(
+                    [
+                        "IQN",
+                        "TPGT",
+                        "LUN",
+                        "Image",
+                        "Read MBytes",
+                        "Read IOPs",
+                    ],
+                    rows,
+                )
+            )
+        else:
+            lines.append("No LUN metrics found.")
 
-def format_initiator_metrics(summary: dict) -> str:
-    lines = [
-        f"Node: {summary.get('node', 'unknown')}",
-        "Role: initiator",
-        "",
-        f"Sessions: {summary.get('sessions', 0)}",
-        f"Total mounts: {summary.get('total', 0)}",
-        f"Mounted: {summary.get('mounted', 0)}",
-        f"Unmounted: {summary.get('unmounted', 0)}",
-    ]
+        deleted_images = summary.get("deleted_images", [])
 
-    session_details = summary.get("session_details", [])
-
-    if session_details:
         lines.append("")
-        lines.append("Session Details")
+        lines.append("Removed images since backup comparison")
 
-        for detail in session_details:
-            lines.append(f"- {detail}")
+        if deleted_images:
+            rows = [
+                [
+                    row.get("type", "unknown"),
+                    row.get("image_name", "-"),
+                    row.get("path", "-"),
+                ]
+                for row in deleted_images
+            ]
 
-    if summary.get("errors"):
-        lines.append("")
-        lines.append("Warnings")
+            lines.append(
+                render_table(
+                    ["Type", "Image", "Path"],
+                    rows,
+                )
+            )
 
-        for error in summary["errors"]:
-            lines.append(f"- {error}")
+            comparison_source = summary.get("comparison_source")
+            if comparison_source:
+                lines.append("")
+                lines.append("Comparison source")
+                lines.append(comparison_source)
+        else:
+            lines.append("None")
 
-    return "\n".join(lines)
+        comparison_summary = summary.get("comparison_summary")
+
+        if comparison_summary:
+            lines.append("")
+            lines.append("Snapshot change summary")
+
+            lines.append(
+                render_table(
+                    [
+                        "IQNs +",
+                        "IQNs -",
+                        "TPGTs +",
+                        "TPGTs -",
+                        "LUNs +",
+                        "LUNs -",
+                        "ACLs +",
+                        "ACLs -",
+                        "Storage +",
+                        "Storage -",
+                        "Rootfs -",
+                        "PE -",
+                    ],
+                    [
+                        [
+                            str(comparison_summary.get("iqns_added", 0)),
+                            str(comparison_summary.get("iqns_removed", 0)),
+                            str(comparison_summary.get("tpgs_added", 0)),
+                            str(comparison_summary.get("tpgs_removed", 0)),
+                            str(comparison_summary.get("luns_added", 0)),
+                            str(comparison_summary.get("luns_removed", 0)),
+                            str(comparison_summary.get("acls_added", 0)),
+                            str(comparison_summary.get("acls_removed", 0)),
+                            str(comparison_summary.get("storage_objects_added", 0)),
+                            str(comparison_summary.get("storage_objects_removed", 0)),
+                            str(comparison_summary.get("rootfs_deleted", 0)),
+                            str(comparison_summary.get("pe_deleted", 0)),
+                        ]
+                    ],
+                )
+            )
+
+        if summary.get("errors"):
+            lines.append("")
+            lines.append("Warnings")
+            lines.extend(f"- {error}" for error in summary["errors"])
+
+        sections.append("\n".join(lines))
+
+    return ("\n\n").join(sections)
+
+
+def format_initiator_metrics(summaries: list[dict]) -> str:
+    sections = []
+
+    for summary in summaries:
+        lines = [
+            f"Node: {summary.get('node', 'unknown')}",
+            "Role: initiator",
+            "",
+            f"Sessions: {summary.get('sessions', 0)}",
+            f"Total mounts: {summary.get('total', 0)}",
+            f"Mounted: {summary.get('mounted', 0)}",
+            f"Unmounted: {summary.get('unmounted', 0)}",
+        ]
+
+        session_details = summary.get("session_details", [])
+
+        if session_details:
+            lines.append("")
+            lines.append("Session Details")
+
+            for detail in session_details:
+                lines.append(f"- {detail}")
+
+        if summary.get("errors"):
+            lines.append("")
+            lines.append("Warnings")
+
+            for error in summary["errors"]:
+                lines.append(f"- {error}")
+
+        sections.append("\n".join(lines))
+
+    return ("\n\n").join(sections)
+
+
+def format_both_metrics(summaries: tuple[list[dict], list[dict]]) -> str:
+    target_summary = format_target_metrics(summaries[0])
+    initiator_summary = format_initiator_metrics(summaries[1])
+    return "\n\n".join([target_summary, initiator_summary])
 
 
 def format_error_summary(payload: dict) -> str:

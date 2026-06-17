@@ -49,6 +49,7 @@ from .formatter import (
     format_initiator_summary,
     format_target_metrics,
     format_initiator_metrics,
+    format_both_metrics,
     emit_output,
 )
 
@@ -248,16 +249,33 @@ def cmd_get_metrics(args) -> None:
         role = detect_node_role(labels)
         if role == "initiator":
             summary = build_initiator_node_summary(node_name)
-            emit_output(summary, formatter=format_initiator_metrics)
+            emit_output([summary], formatter=format_initiator_metrics)
         elif role == "target":
-            summary = build_target_node_summary(node_name, with_metrics=True)
+            summary = build_target_node_summary(
+                node_name, with_metrics=True, compare_config=args.config_file
+            )
             emit_output(
-                summary, formatter=format_target_metrics, out_file=args.out_file
+                [summary], formatter=format_target_metrics, out_file=args.out_file
             )
         else:
             raise CLIParameterError(f"{node_name}: unknown role, cannot fetch metrics")
     else:
-        raise CLIParameterError("Provide a node name with --name flag")
+        target_nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
+        with ThreadPoolExecutor(max_workers=min(32, len(target_nodes))) as executor:
+            target_summaries = list(
+                executor.map(build_target_node_summary, target_nodes)
+            )
+
+        initiator_nodes = get_kubernetes_nodes(DEFAULT_INITIATOR_SELECTOR)
+        with ThreadPoolExecutor(max_workers=min(32, len(initiator_nodes))) as executor:
+            initiator_summaries = list(
+                executor.map(build_initiator_node_summary, initiator_nodes)
+            )
+        emit_output(
+            payload=(target_summaries, initiator_summaries),
+            formatter=format_both_metrics,
+            out_file=args.out_file,
+        )
 
 
 def cmd_get_sessions(args) -> None:
