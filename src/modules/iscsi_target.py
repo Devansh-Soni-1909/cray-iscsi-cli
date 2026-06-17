@@ -99,6 +99,7 @@ def list_config_versions(
                 else:
                     timestamp = "Unknown"
                 versions.append((filepath, timestamp))
+            versions.reverse()
             return current_config, versions
         except Exception as e:
             last_error = str(e)

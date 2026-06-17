@@ -679,33 +679,45 @@ def format_error_summary(payload: dict) -> str:
     return "\n".join(lines)
 
 
-def format_configs_output(payload: dict) -> str:
-    node = payload.get("node", "")
-    current_config = payload.get("current_config")
-    versions = payload.get("versions", [])
+def format_configs_output(payloads: list[dict]) -> str:
+    separator = "\n\n"
+    sections = []
 
-    lines = [f"Node: {node}", ""]
+    for payload in payloads:
+        node = payload.get("node", "")
+        current_config = payload.get("current_config")
+        versions = payload.get("versions", [])
 
-    lines.append("Current Configuration")
-    lines.append("---------------------")
-    if current_config:
-        current_path = Path(current_config)
-        lines.append(f"{current_path.name} ({current_path})")
-    else:
-        lines.append("None")
+        lines = [
+            f"Node: {node}",
+            "",
+            "Current Configuration",
+            "---------------------",
+        ]
 
-    lines.append("")
-    lines.append("Backup Configurations")
-    lines.append("---------------------")
+        if current_config:
+            current_path = Path(current_config)
+            lines.append(f"{current_path.name} ({current_path})")
+        else:
+            lines.append("None")
 
-    if not versions:
-        lines.append("None")
-        return "\n".join(lines)
+        lines.extend(
+            [
+                "",
+                "Backup Configurations",
+                "---------------------",
+            ]
+        )
 
-    headers = ["DATE", "FILE", "PATH"]
+        if versions:
+            headers = ["DATE", "FILE", "PATH"]
+            rows = [
+                [date, Path(filepath).name, filepath] for filepath, date in versions
+            ]
+            lines.append(render_table(headers, rows))
+        else:
+            lines.append("None")
 
-    rows = [[date, Path(filepath).name, filepath] for filepath, date in versions]
+        sections.append("\n".join(lines))
 
-    lines.append(render_table(headers, rows))
-
-    return "\n".join(lines)
+    return separator.join(sections)

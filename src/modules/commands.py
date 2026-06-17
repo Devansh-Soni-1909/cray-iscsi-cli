@@ -113,12 +113,29 @@ def cmd_get_configs(args) -> None:
             )
         current, versions = list_config_versions(args.name)
         emit_output(
-            {"node": args.name, "current_config": current, "versions": versions},
+            [{"node": args.name, "current_config": current, "versions": versions}],
             formatter=format_configs_output,
             out_file=args.out_file,
         )
     else:
-        raise CLIParameterError("Please provide the node name with the flag --name")
+        nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
+
+        def collect_node_config(node: str) -> dict:
+            current, versions = list_config_versions(node)
+            return {
+                "node": node,
+                "current_config": current,
+                "versions": versions,
+            }
+
+        with ThreadPoolExecutor(max_workers=min(32, len(nodes))) as executor:
+            payload = list(executor.map(collect_node_config, nodes))
+
+        emit_output(
+            payload,
+            formatter=format_configs_output,
+            out_file=args.out_file,
+        )
 
 
 def cmd_get_luns(args) -> None:
