@@ -51,10 +51,7 @@ def collect_service_errors(
     days: int = 2,
     lines: int = 100,
 ) -> Tuple[dict, List[str]]:
-    services = [
-        "sbps-marshal.service",
-        "target.service",
-    ]
+    services = ["sbps-marshal.service", "target.service", "rtslib-fb-targetctl.service"]
 
     service_logs = {}
     errors = []
