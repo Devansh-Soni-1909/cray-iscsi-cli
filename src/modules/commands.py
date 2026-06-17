@@ -15,6 +15,7 @@ from .kubernetes import (
 )
 from .iscsi_target import (
     filter_images,
+    collect_target_luns,
     collect_target_images,
     collect_target_tpgts,
     build_target_node_summary,
@@ -147,15 +148,15 @@ def cmd_get_luns(args) -> None:
             raise CLIParameterError(
                 f"{args.name}: role is '{role}', this command is only valid for target nodes"
             )
-        images, _, errors = collect_target_images(args.name, with_metrics)
-        images = filter_images(images, args.image_type)
+        luns, _, errors = collect_target_luns(args.name, with_metrics)
+        luns = filter_images(luns, args.image_type)
         if errors:
             raise TargetConfigurationError(args.name, "; ".join(errors))
         payload = {
             "node": args.name,
             "role": role,
-            "luns": [asdict(image) for image in images],
-            "count": len(images),
+            "luns": [asdict(lun) for lun in luns],
+            "count": len(luns),
             "image_type": args.image_type,
             "with_metrics": with_metrics,
         }
@@ -164,10 +165,10 @@ def cmd_get_luns(args) -> None:
         summaries = collect_summaries_concurrently(nodes, with_metrics)
         if args.image_type != "all":
             for summary in summaries:
-                summary["images"] = [
-                    image
-                    for image in summary.get("images", [])
-                    if image.get("image_type") == args.image_type
+                summary["luns"] = [
+                    lun
+                    for lun in summary.get("luns", [])
+                    if lun.get("image", {}).get("image_type") == args.image_type
                 ]
         payload = {"nodes": summaries, "with_metrics": with_metrics}
     emit_output(payload, formatter=format_luns_output, out_file=args.out_file)
@@ -202,42 +203,40 @@ def cmd_get_images(args) -> None:
                 f"{args.name}: role is '{role}', this command is only valid for target nodes"
             )
         images, tpgts, errors = collect_target_images(args.name, with_metrics)
-        images = filter_images(images, args.image_type)
-        filtered_tpgts = []
-        if args.image_type == "all":
-            filtered_tpgts = tpgts
-        else:
-            allowed_ids = {image.lun_id for image in images}
-            for tpgt in tpgts:
-                filtered_luns = [
-                    lun for lun in tpgt["luns"] if lun["lun_id"] in allowed_ids
-                ]
-                if filtered_luns:
-                    filtered_tpgt = dict(tpgt)
-                    filtered_tpgt["luns"] = filtered_luns
-                    filtered_tpgt["lun_count"] = len(filtered_luns)
-                    filtered_tpgts.append(filtered_tpgt)
+        if args.image_type != "all":
+            images = [img for img in images if img.image_type == args.image_type]
         if errors:
             raise TargetConfigurationError(args.name, "; ".join(errors))
         payload = {
             "node": args.name,
             "role": role,
-            "images": [asdict(image) for image in images],
-            "tpgts": filtered_tpgts,
+            "images": [asdict(img) for img in images],
+            "tpgts": tpgts,
             "count": len(images),
             "image_type": args.image_type,
             "with_metrics": with_metrics,
         }
     else:
         nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
-        summaries = collect_summaries_concurrently(nodes, with_metrics)
-        if args.image_type != "all":
-            for summary in summaries:
-                summary["images"] = [
-                    image
-                    for image in summary.get("images", [])
-                    if image.get("image_type") == args.image_type
-                ]
+
+        def collect_node_images(node: str) -> dict:
+            imgs, node_tpgts, node_errors = collect_target_images(node, with_metrics)
+            if args.image_type != "all":
+                imgs = [img for img in imgs if img.image_type == args.image_type]
+            return {
+                "node": node,
+                "role": "target",
+                "images": [asdict(img) for img in imgs],
+                "tpgts": node_tpgts,
+                "count": len(imgs),
+                "image_type": args.image_type,
+                "with_metrics": with_metrics,
+                "errors": node_errors,
+            }
+
+        with ThreadPoolExecutor(max_workers=min(32, max(1, len(nodes)))) as executor:
+            summaries = list(executor.map(collect_node_images, nodes))
+
         payload = {"nodes": summaries, "with_metrics": with_metrics}
     emit_output(payload, formatter=format_images_output, out_file=args.out_file)
 

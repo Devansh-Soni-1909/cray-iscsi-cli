@@ -2,7 +2,7 @@ from __future__ import annotations
 import re
 from dataclasses import asdict
 from typing import List, Optional, Tuple
-from .schemas import NodeErrorReport
+from .schemas import NodeError
 from .utils import (
     run_pdsh_text_by_node,
     run_pdsh_text,
@@ -107,14 +107,14 @@ def collect_recent_logs_for_nodes(
     return logs_by_node, errors_by_node
 
 
-def scan_logs_for_errors(node: str, log_text: str) -> List[NodeErrorReport]:
-    findings: List[NodeErrorReport] = []
+def scan_logs_for_errors(node: str, log_text: str) -> List[NodeError]:
+    findings: List[NodeError] = []
     for line in log_text.splitlines():
         lowered = line.lower()
         for entry in ERROR_PATTERNS:
             if re.search(entry["pattern"], lowered, re.IGNORECASE):
                 findings.append(
-                    NodeErrorReport(
+                    NodeError(
                         node=node,
                         source=entry["source"],
                         severity=entry["severity"],
@@ -125,7 +125,7 @@ def scan_logs_for_errors(node: str, log_text: str) -> List[NodeErrorReport]:
     return findings
 
 
-def collect_node_diagnostics(node: str) -> Tuple[List[NodeErrorReport], List[str]]:
+def collect_node_diagnostics(node: str) -> Tuple[List[NodeError], List[str]]:
     logs, log_error = collect_recent_logs(node)
     if log_error:
         return [], [log_error]

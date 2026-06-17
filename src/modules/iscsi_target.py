@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from dataclasses import asdict
 
-from .schemas import LunImage, TpgtInfo
+from .schemas import Lun, Image, Tpgt
 from .utils import run_pdsh_text, run_pdsh_lines, parse_metric_value
 from .error_collector import collect_node_diagnostics
 from .schemas import TargetConfigurationError, MetricsCollectionError
@@ -20,8 +20,9 @@ SAVECONFIG_PATHS = [
     "/etc/target/saveconfig.json",
 ]
 BACKUP_PATHS = ["/etc/rtslib-fb-target/backup", "/etc/target/backup"]
-TARGET_METRICS_BASE_PATH = "/sys/kernel/config/target/iscsi"
 
+LUN_METRICS_BASE_PATH = "/sys/kernel/config/target/iscsi"
+IMAGE_METRICS_BASE_PATH = "/sys/kernel/config/target/core"
 
 _saveconfig_cache: Dict[str, Tuple[Optional[dict], Optional[str]]] = {}
 
@@ -138,16 +139,18 @@ def list_iqns(node: str) -> Tuple[List[str], List[str]]:
         return [], [str(exc)]
 
 
-def list_tpgts(node: str, iqn: str) -> Tuple[List[TpgtInfo], List[str]]:
+def list_tpgts(node: str, iqn: str) -> Tuple[List[Tpgt], List[str]]:
     try:
         data = get_saveconfig(node)
-        tpgts: List[TpgtInfo] = []
+        tpgts: List[Tpgt] = []
         for target in data.get("targets", []):
             if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
                 for tpg in target.get("tpgs", []):
                     if "tag" in tpg:
                         tag = tpg["tag"]
-                        tpgts.append(TpgtInfo(tag=tag, tpgt_name=f"tpgt_{tag}"))
+                        tpgts.append(
+                            Tpgt(node=node, iqn=iqn, tag=tag, tpgt_name=f"tpgt_{tag}")
+                        )
         return tpgts, []
     except TargetConfigurationError as exc:
         return [], [str(exc)]
@@ -169,17 +172,48 @@ def list_acls(node: str, iqn: str, tpgt_tag: int) -> Tuple[List[str], List[str]]
         return [], [str(exc)]
 
 
-def list_luns(node: str, iqn: str, tpgt_tag: int) -> Tuple[List[str], List[str]]:
+def list_luns(node: str, iqn: str, tpgt_tag: int) -> Tuple[List[Lun], List[str]]:
     try:
         data = get_saveconfig(node)
-        luns = []
+        luns: List[Lun] = []
+        tpgt_obj = Tpgt(node=node, iqn=iqn, tag=tpgt_tag, tpgt_name=f"tpgt_{tpgt_tag}")
         for target in data.get("targets", []):
             if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
                 for tpg in target.get("tpgs", []):
                     if int(tpg.get("tag")) == tpgt_tag:
-                        for lun in tpg.get("luns", []):
-                            if "index" in lun:
-                                luns.append(f"lun_{lun['index']}")
+                        for lun_entry in tpg.get("luns", []):
+                            if "index" not in lun_entry:
+                                continue
+                            lun_index = lun_entry["index"]
+                            parts = lun_entry.get("storage_object", "").rstrip("/").split("/")
+                            if len(parts) < 2:
+                                continue
+                            plugin = parts[-2]
+                            storage_name = parts[-1]
+                            udev_path, error = get_image_udev_path(node, plugin, storage_name)
+                            if error:
+                                return [], [error]
+                            image_name = udev_path.rstrip("/").split("/")[-1] if udev_path else storage_name
+                            image_type = infer_image_type(udev_path or storage_name)
+                            image_obj = Image(
+                                node=node,
+                                image_name=image_name,
+                                image_type=image_type,
+                                udev_path=udev_path or "",
+                                read_mbytes=0,
+                                read_iops=0,
+                            )
+                            luns.append(
+                                Lun(
+                                    lun_id=str(lun_index),
+                                    lun_name=storage_name,
+                                    tpgt=tpgt_obj,
+                                    image=image_obj,
+                                    object_path=lun_entry.get("storage_object", ""),
+                                    read_mbytes=0,
+                                    read_iops=0,
+                                )
+                            )
         return luns, []
     except TargetConfigurationError as exc:
         return [], [str(exc)]
@@ -201,6 +235,17 @@ def get_image_udev_path(node: str, plugin: str, name: str) -> Tuple[str, Optiona
         return None, str(exc)
 
 
+def get_image_fileio_idx(node: str, name: str) -> Tuple[int, Optional[str]]:
+    try:
+        data = get_saveconfig(node)
+        for idx, obj in enumerate(data.get("storage_objects", [])):
+            if obj.get("name") == name:
+                return idx, None
+        return -1, f"No storage object with name '{name}' found in saveconfig"
+    except TargetConfigurationError as exc:
+        return -1, str(exc)
+
+
 def infer_image_type(identity: str) -> str:
     lowered = identity.lower()
     if "rootfs" in lowered:
@@ -210,42 +255,37 @@ def infer_image_type(identity: str) -> str:
     return "unknown"
 
 
-def list_images(node: str, iqn: str, tpgt_tag: int) -> Tuple[List[LunImage], List[str]]:
+def list_images(node: str, iqn: str, tpgt_tag: int) -> Tuple[List[Image], List[str]]:
     try:
         data = get_saveconfig(node)
-        images: List[LunImage] = []
+        images: List[Image] = []
         for target in data.get("targets", []):
             if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
                 for tpg in target.get("tpgs", []):
                     if int(tpg.get("tag")) == tpgt_tag:
-                        for lun in tpg.get("luns", []):
-                            if "index" in lun:
-                                parts = lun.get("storage_object").rstrip("/").split("/")
-                                if len(parts) >= 2:
-                                    plugin = parts[-2]
-                                    name = parts[-1]
-                                    udev_path, error = get_image_udev_path(
-                                        node, plugin, name
-                                    )
-                                    if error:
-                                        return [], [error]
-                                    image_name = udev_path.rstrip("").split("/")[-1]
-                                    image_type = infer_image_type(udev_path)
-                                    images.append(
-                                        LunImage(
-                                            node=node,
-                                            iqn=iqn,
-                                            tpgt_name=f"tpgt_{tpgt_tag}",
-                                            lun_id=lun.get("index"),
-                                            lun_name=name,
-                                            image_name=image_name,
-                                            image_type=image_type,
-                                            object_path=lun.get("storage_object"),
-                                            udev_path=udev_path,
-                                            read_mbytes=0,
-                                            read_iops=0,
-                                        )
-                                    )
+                        for lun_entry in tpg.get("luns", []):
+                            if "index" not in lun_entry:
+                                continue
+                            parts = lun_entry.get("storage_object", "").rstrip("/").split("/")
+                            if len(parts) < 2:
+                                continue
+                            plugin = parts[-2]
+                            storage_name = parts[-1]
+                            udev_path, error = get_image_udev_path(node, plugin, storage_name)
+                            if error:
+                                return [], [error]
+                            image_name = udev_path.rstrip("/").split("/")[-1] if udev_path else storage_name
+                            image_type = infer_image_type(udev_path or storage_name)
+                            images.append(
+                                Image(
+                                    node=node,
+                                    image_name=image_name,
+                                    image_type=image_type,
+                                    udev_path=udev_path or "",
+                                    read_mbytes=0,
+                                    read_iops=0,
+                                )
+                            )
         return images, []
     except TargetConfigurationError as exc:
         return [], [str(exc)]
@@ -254,11 +294,66 @@ def list_images(node: str, iqn: str, tpgt_tag: int) -> Tuple[List[LunImage], Lis
 def read_lun_stats(
     node: str, iqn: str, tpgt_tag: str, lun_index: str
 ) -> Dict[str, int]:
-    stats_path = f"{TARGET_METRICS_BASE_PATH}/{iqn}/tpgt_{tpgt_tag}/lun/lun_{lun_index}/statistics/scsi_tgt_port"
+    stats_path = f"{LUN_METRICS_BASE_PATH}/{iqn}/tpgt_{tpgt_tag}/lun/lun_{lun_index}/statistics/scsi_tgt_port"
 
     remote_script = (
         f"mbytes=$(cat {stats_path}/read_mbytes 2>/dev/null); "
         f"iops=$(cat {stats_path}/in_cmds 2>/dev/null); "
+        'printf "read_mbytes=%s\\nread_iops=%s\\n" "$mbytes" "$iops"'
+    )
+    command = f"pdsh -w {node} {shlex.quote(f'sh -c {shlex.quote(remote_script)}')}"
+
+    def _parse_metrics(output_text: str) -> Tuple[str, str]:
+        metric_map: Dict[str, str] = {}
+        for line in output_text.splitlines():
+            if "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            metric_map[key.strip()] = value.strip()
+        return metric_map.get("read_mbytes", ""), metric_map.get("read_iops", "")
+
+    read_mbytes_output = ""
+    read_iops_output = ""
+    try:
+        output = run_pdsh_text(command)
+        read_mbytes_output, read_iops_output = _parse_metrics(output)
+    except Exception as read_error:
+        # Retry once
+        try:
+            output = run_pdsh_text(command)
+            read_mbytes_output, read_iops_output = _parse_metrics(output)
+        except Exception as retry_error:
+            raise MetricsCollectionError(
+                node, f"Failed to read metrics from {stats_path}: {retry_error}"
+            )
+
+    if read_mbytes_output == "":
+        raise MetricsCollectionError(
+            node, f"Missing read_mbytes value under {stats_path}"
+        )
+    if read_iops_output == "":
+        raise MetricsCollectionError(
+            node, f"Missing read_iops value under {stats_path}"
+        )
+
+    return {
+        "read_mbytes": parse_metric_value(read_mbytes_output),
+        "read_iops": parse_metric_value(read_iops_output),
+    }
+
+
+def read_image_stats(
+    node: str,
+    fileio_idx: int,
+    image_name: str,
+) -> Dict[str, int]:
+    stats_path = (
+        f"{IMAGE_METRICS_BASE_PATH}/fileio_{fileio_idx}/{image_name}/statistics/scsi_lu"
+    )
+
+    remote_script = (
+        f"mbytes=$(cat {stats_path}/read_mbytes 2>/dev/null); "
+        f"iops=$(cat {stats_path}/num_cmds 2>/dev/null); "
         'printf "read_mbytes=%s\\nread_iops=%s\\n" "$mbytes" "$iops"'
     )
     command = f"pdsh -w {node} {shlex.quote(f'sh -c {shlex.quote(remote_script)}')}"
@@ -394,23 +489,24 @@ def compare_snapshots(
     }
 
 
-def count_by_type(images: List[LunImage]) -> Dict[str, int]:
+def count_by_type(luns: List[Lun]) -> Dict[str, int]:
     counts = {"rootfs": 0, "pe": 0, "unknown": 0}
-    for image in images:
-        counts[image.image_type] = counts.get(image.image_type, 0) + 1
+    for lun in luns:
+        img_type = lun.image.image_type
+        counts[img_type] = counts.get(img_type, 0) + 1
     return counts
 
 
-def sum_metric(images: List[LunImage], field_name: str) -> int:
-    return sum(getattr(image, field_name, 0) for image in images)
+def sum_metric(luns: List[Lun], field_name: str) -> int:
+    return sum(getattr(lun, field_name, 0) for lun in luns)
 
 
-def collect_target_images(
+def collect_target_luns(
     node: str, with_metrics: bool = False
-) -> Tuple[List[LunImage], List[dict], List[str]]:
+) -> Tuple[List[Lun], List[dict], List[str]]:
     errors: List[str] = []
     all_tpgts: List[dict] = []
-    images: List[LunImage] = []
+    luns: List[Lun] = []
 
     try:
         iqns, iqn_errors = list_iqns(node)
@@ -421,56 +517,44 @@ def collect_target_images(
 
     def _collect_tpgt(
         iqn: str, tpgt_tag: int
-    ) -> Tuple[dict, List[LunImage], List[str]]:
+    ) -> Tuple[dict, List[Lun], List[str]]:
         tpgt_errors: List[str] = []
-        tpgt_images: List[LunImage] = []
 
-        luns, lun_errors = list_luns(node, iqn, tpgt_tag)
+        lun_results, lun_errors = list_luns(node, iqn, tpgt_tag)
         acls, acl_errors = list_acls(node, iqn, tpgt_tag)
-
         tpgt_errors.extend(lun_errors)
         tpgt_errors.extend(acl_errors)
 
-        lun_results: List[LunImage] = []
-        if luns:
-            lun_results, image_errors = list_images(node, iqn, tpgt_tag)
-            tpgt_errors.extend(image_errors)
-            if with_metrics:
+        if lun_results and with_metrics:
 
-                def fetch_lun_stats(lun: LunImage) -> Tuple[LunImage, dict]:
-                    data = read_lun_stats(
-                        node,
-                        iqn,
-                        tpgt_tag,
-                        lun.lun_id,
-                    )
-                    return lun, data
+            def fetch_lun_stats(lun: Lun) -> Tuple[Lun, dict]:
+                data = read_lun_stats(node, iqn, tpgt_tag, lun.lun_id)
+                return lun, data
 
-                with ThreadPoolExecutor(max_workers=10) as executor:
-                    futures = [
-                        executor.submit(fetch_lun_stats, lun) for lun in lun_results
-                    ]
-                    for future in as_completed(futures):
-                        try:
-                            lun, data = future.result()
-                            if data:
-                                lun.read_mbytes = data.get("read_mbytes")
-                                lun.read_iops = data.get("read_iops")
-                        except Exception as exc:
-                            tpgt_errors.append(str(exc))
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                futures = [
+                    executor.submit(fetch_lun_stats, lun) for lun in lun_results
+                ]
+                for future in as_completed(futures):
+                    try:
+                        lun, data = future.result()
+                        if data:
+                            lun.read_mbytes = data.get("read_mbytes", 0)
+                            lun.read_iops = data.get("read_iops", 0)
+                    except Exception as exc:
+                        tpgt_errors.append(str(exc))
 
         lun_results.sort(key=lambda item: (int(item.lun_id), item.lun_name))
-        tpgt_images.extend(lun_results)
         tpgt_entry = {
             "node": node,
             "iqn": iqn,
             "tpgt_name": f"tpgt_{tpgt_tag}",
-            "luns": [asdict(image) for image in lun_results],
+            "luns": [asdict(lun) for lun in lun_results],
             "acl_names": acls,
             "acl_count": len(acls),
             "lun_count": len(lun_results),
         }
-        return tpgt_entry, tpgt_images, tpgt_errors
+        return tpgt_entry, lun_results, tpgt_errors
 
     for iqn in iqns:
         tpgt_info_list, tpgt_errors = list_tpgts(node, iqn)
@@ -479,7 +563,88 @@ def collect_target_images(
         if not tpgt_info_list:
             continue
 
-        tpgt_results: List[Tuple[dict, List[LunImage], List[str]]] = []
+        tpgt_results: List[Tuple[dict, List[Lun], List[str]]] = []
+        for tpgt_info in tpgt_info_list:
+            tpgt_results.append(_collect_tpgt(iqn, tpgt_info.tag))
+
+        for tpgt_entry, tpgt_luns, tpgt_errors_local in sorted(
+            tpgt_results, key=lambda item: item[0]["tpgt_name"]
+        ):
+            all_tpgts.append(tpgt_entry)
+            luns.extend(tpgt_luns)
+            errors.extend(tpgt_errors_local)
+
+    return luns, all_tpgts, errors
+
+
+def collect_target_images(
+    node: str, with_metrics: bool = False
+) -> Tuple[List[Image], List[dict], List[str]]:
+    errors: List[str] = []
+    all_tpgts: List[dict] = []
+    images: List[Image] = []
+
+    try:
+        iqns, iqn_errors = list_iqns(node)
+        errors.extend(iqn_errors)
+    except Exception as exc:
+        errors.append(str(exc))
+        return [], [], errors
+
+    def _collect_tpgt(
+        iqn: str, tpgt_tag: int
+    ) -> Tuple[dict, List[Image], List[str]]:
+        tpgt_errors: List[str] = []
+
+        image_results, image_errors = list_images(node, iqn, tpgt_tag)
+        acls, acl_errors = list_acls(node, iqn, tpgt_tag)
+        tpgt_errors.extend(image_errors)
+        tpgt_errors.extend(acl_errors)
+
+        if image_results and with_metrics:
+
+            def fetch_image_stats(image: Image) -> Tuple[Image, dict]:
+                fileio_idx, idx_error = get_image_fileio_idx(node, image.image_name)
+                if idx_error or fileio_idx < 0:
+                    raise MetricsCollectionError(
+                        node,
+                        f"Cannot determine fileio index for '{image.image_name}': {idx_error}",
+                    )
+                data = read_image_stats(node, fileio_idx, image.image_name)
+                return image, data
+
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                futures = [
+                    executor.submit(fetch_image_stats, img) for img in image_results
+                ]
+                for future in as_completed(futures):
+                    try:
+                        image, data = future.result()
+                        if data:
+                            image.read_mbytes = data.get("read_mbytes", 0)
+                            image.read_iops = data.get("read_iops", 0)
+                    except Exception as exc:
+                        tpgt_errors.append(str(exc))
+
+        tpgt_entry = {
+            "node": node,
+            "iqn": iqn,
+            "tpgt_name": f"tpgt_{tpgt_tag}",
+            "images": [asdict(image) for image in image_results],
+            "acl_names": acls,
+            "acl_count": len(acls),
+            "image_count": len(image_results),
+        }
+        return tpgt_entry, image_results, tpgt_errors
+
+    for iqn in iqns:
+        tpgt_info_list, tpgt_errors = list_tpgts(node, iqn)
+        errors.extend(tpgt_errors)
+
+        if not tpgt_info_list:
+            continue
+
+        tpgt_results: List[Tuple[dict, List[Image], List[str]]] = []
         for tpgt_info in tpgt_info_list:
             tpgt_results.append(_collect_tpgt(iqn, tpgt_info.tag))
 
@@ -496,14 +661,14 @@ def collect_target_images(
 def collect_target_tpgts(
     node: str, with_metrics: bool = False
 ) -> Tuple[List[dict], List[str]]:
-    _, tpgts, errors = collect_target_images(node, with_metrics)
+    _, tpgts, errors = collect_target_luns(node, with_metrics)
     return tpgts, errors
 
 
-def filter_images(images: List[LunImage], image_type: str) -> List[LunImage]:
+def filter_images(luns: List[Lun], image_type: str) -> List[Lun]:
     if image_type == "all":
-        return images
-    return [image for image in images if image.image_type == image_type]
+        return luns
+    return [lun for lun in luns if lun.image.image_type == image_type]
 
 
 def snapshot_deleted_rows(delta: dict) -> List[dict]:
@@ -558,15 +723,15 @@ def build_target_node_summary(
     compare_config: str | None = None,
 ) -> dict:
     errors: List[str] = []
-    images = []
-    tpgts = []
+    luns: List[Lun] = []
+    tpgts: List[dict] = []
     try:
-        images, tpgts, collect_errors = collect_target_images(node, with_metrics)
+        luns, tpgts, collect_errors = collect_target_luns(node, with_metrics)
         errors.extend(collect_errors)
     except Exception as exc:
         errors.append(str(exc))
 
-    by_type = count_by_type(images)
+    by_type = count_by_type(luns)
 
     diagnostics, diagnostic_errors = collect_node_diagnostics(node)
     errors.extend(diagnostic_errors)
@@ -574,17 +739,17 @@ def build_target_node_summary(
     summary = {
         "node": node,
         "role": "target",
-        "iqns": sorted({image.iqn for image in images}),
+        "iqns": sorted({lun.tpgt.iqn for lun in luns}),
         "tpgts": tpgts,
         "tpgt_count": len(tpgts),
-        "lun_count": len(images),
-        "total_active_images": len(images),
+        "lun_count": len(luns),
+        "total_active_images": len(luns),
         "rootfs_count": by_type.get("rootfs", 0),
         "pe_count": by_type.get("pe", 0),
         "unknown_count": by_type.get("unknown", 0),
-        "read_mbytes": sum_metric(images, "read_mbytes"),
-        "read_iops": sum_metric(images, "read_iops"),
-        "images": [asdict(image) for image in images],
+        "read_mbytes": sum_metric(luns, "read_mbytes"),
+        "read_iops": sum_metric(luns, "read_iops"),
+        "luns": [asdict(lun) for lun in luns],
         "diagnostics": [asdict(diagnostic) for diagnostic in diagnostics],
         "errors": errors,
         "with_metrics": with_metrics,
@@ -688,7 +853,8 @@ def build_backup_config_summary(
         iqns.append(iqn)
 
         for tpgt in target.get("tpgs", []):
-            tpgt_name = str(tpgt.get("tag", ""))
+            tag = tpgt.get("tag", 0)
+            tpgt_name = f"tpgt_{tag}"
 
             tpgts.append(
                 {
@@ -702,32 +868,43 @@ def build_backup_config_summary(
                 }
             )
 
-            for lun in tpgt.get("luns", []):
-                storage_path = lun.get("storage_object", "")
+            for lun_entry in tpgt.get("luns", []):
+                storage_path = lun_entry.get("storage_object", "")
                 storage_name = storage_path.split("/")[-1]
 
                 storage_object = storage_by_name.get(storage_name, {})
+                udev_path = storage_object.get("dev", "")
+                image_name = udev_path.rstrip("/").split("/")[-1] if udev_path else storage_name
+                image_type = infer_image_type(udev_path or storage_name)
 
-                if storage_name.startswith("rootfs_"):
-                    image_type = "rootfs"
+                if image_type == "rootfs":
                     rootfs_count += 1
-                elif storage_name.startswith("pe_"):
-                    image_type = "pe"
+                elif image_type == "pe":
                     pe_count += 1
                 else:
-                    image_type = "unknown"
                     unknown_count += 1
 
                 images.append(
                     {
-                        "iqn": iqn,
-                        "tpgt_name": tpgt_name,
-                        "lun_name": str(lun.get("index", "")),
-                        "image_type": image_type,
-                        "image_name": storage_name,
-                        "udev_path": storage_object.get("dev", ""),
-                        "read_mbytes": "N/A",
-                        "read_iops": "N/A",
+                        "lun_id": str(lun_entry.get("index", "")),
+                        "lun_name": storage_name,
+                        "tpgt": {
+                            "node": node,
+                            "iqn": iqn,
+                            "tag": tag,
+                            "tpgt_name": tpgt_name,
+                        },
+                        "image": {
+                            "node": node,
+                            "image_name": image_name,
+                            "image_type": image_type,
+                            "udev_path": udev_path,
+                            "read_mbytes": 0,
+                            "read_iops": 0,
+                        },
+                        "object_path": storage_path,
+                        "read_mbytes": 0,
+                        "read_iops": 0,
                     }
                 )
 
@@ -744,7 +921,7 @@ def build_backup_config_summary(
         "rootfs_count": rootfs_count,
         "pe_count": pe_count,
         "unknown_count": unknown_count,
-        "images": images,
+        "luns": images,
         "with_metrics": False,
         "errors": [],
     }

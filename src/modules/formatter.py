@@ -110,7 +110,7 @@ def format_target_summary(summary: dict) -> str:
             ]
         )
 
-    images = summary.get("images", [])
+    images = summary.get("luns", summary.get("images", []))
     if images:
         headers = [
             "IQN",
@@ -130,20 +130,22 @@ def format_target_summary(summary: dict) -> str:
 
         rows = []
 
-        for image in images:
+        for lun in images:
+            tpgt = lun.get("tpgt", {})
+            image = lun.get("image", {})
             row = [
-                image["iqn"],
-                image["tpgt_name"],
-                image["lun_name"],
-                image["image_type"],
-                image["image_name"],
+                tpgt.get("iqn", ""),
+                tpgt.get("tpgt_name", ""),
+                str(lun.get("lun_id", "")),
+                image.get("image_type", ""),
+                image.get("image_name", ""),
             ]
 
             if with_metrics:
                 row.extend(
                     [
-                        str(image["read_mbytes"]),
-                        str(image["read_iops"]),
+                        str(lun.get("read_mbytes", 0)),
+                        str(lun.get("read_iops", 0)),
                     ]
                 )
 
@@ -192,31 +194,34 @@ def format_luns_output(payload: dict) -> str:
     if "node" in payload:
         lines.append(f"Node: {payload['node']}")
         lines.append(f"Role: {payload.get('role', 'target')}")
-        luns = payload.get("luns", payload.get("images", []))
+        luns = payload.get("luns", [])
         image_filter = payload.get("image_type", "all")
         if image_filter != "all":
             lines.append(f"Filter: {image_filter}")
         lines.append(f"LUNs: {payload.get('count', len(luns))}")
         if luns:
             with_metrics = payload.get("with_metrics", False)
-            headers = ["IQN", "TPGT", "LUN", "Type", "Image", "udev_path"]
+            headers = ["IQN", "TPGT", "LUN ID", "LUN Name", "Type", "Image", "udev_path"]
             if with_metrics:
                 headers.extend(["Read MBytes", "Read IOPs"])
             rows = []
-            for image in luns:
+            for lun in luns:
+                tpgt = lun.get("tpgt", {})
+                image = lun.get("image", {})
                 row = [
-                    image["iqn"],
-                    image["tpgt_name"],
-                    image["lun_name"],
-                    image["image_type"],
-                    image["image_name"],
-                    image["udev_path"],
+                    tpgt.get("iqn", ""),
+                    tpgt.get("tpgt_name", ""),
+                    str(lun.get("lun_id", "")),
+                    lun.get("lun_name", ""),
+                    image.get("image_type", ""),
+                    image.get("image_name", ""),
+                    image.get("udev_path", ""),
                 ]
                 if with_metrics:
                     row.extend(
                         [
-                            str(image["read_mbytes"]),
-                            str(image["read_iops"]),
+                            str(lun.get("read_mbytes", 0)),
+                            str(lun.get("read_iops", 0)),
                         ]
                     )
                 rows.append(row)
@@ -273,21 +278,21 @@ def format_images_output(payload: dict) -> str:
         lines.append(f"Images: {payload.get('count', len(images))}")
         if images:
             with_metrics = payload.get("with_metrics", False)
-            headers = ["Image Name", "LUN", "Type"]
+            headers = ["Image Name", "Type", "udev_path"]
             if with_metrics:
                 headers.extend(["Read MBytes", "Read IOPs"])
             rows = []
             for image in images:
                 row = [
-                    image["image_name"],
-                    image["lun_name"],
-                    image["image_type"],
+                    image.get("image_name", ""),
+                    image.get("image_type", ""),
+                    image.get("udev_path", ""),
                 ]
                 if with_metrics:
                     row.extend(
                         [
-                            str(image["read_mbytes"]),
-                            str(image["read_iops"]),
+                            str(image.get("read_mbytes", 0)),
+                            str(image.get("read_iops", 0)),
                         ]
                     )
                 rows.append(row)
@@ -403,18 +408,18 @@ def format_target_metrics(summary: dict) -> str:
     lines.append("")
     lines.append("LUN read metrics")
 
-    images = summary.get("images", [])
+    images = summary.get("luns", summary.get("images", []))
     if images:
         rows = [
             [
-                image["iqn"],
-                image["tpgt_name"],
-                image["lun_name"],
-                image["image_name"],
-                str(image["read_mbytes"]),
-                str(image["read_iops"]),
+                lun.get("tpgt", {}).get("iqn", ""),
+                lun.get("tpgt", {}).get("tpgt_name", ""),
+                str(lun.get("lun_id", "")),
+                lun.get("image", {}).get("image_name", ""),
+                str(lun.get("read_mbytes", 0)),
+                str(lun.get("read_iops", 0)),
             ]
-            for image in images
+            for lun in images
         ]
 
         lines.append(

@@ -6,32 +6,40 @@ from dataclasses import dataclass
 
 
 @dataclass
-class LunImage:
+class Image:
     node: str
-    iqn: str
-    tpgt_name: str
-    lun_id: str
-    lun_name: str
     image_name: str
     image_type: str
     udev_path: str
+    read_mbytes: int
+    read_iops: int
+
+
+@dataclass
+class Tpgt:
+    node: str
+    iqn: str
+    tag: int
+    tpgt_name: str
+
+
+@dataclass
+class Lun:
+    lun_id: str
+    lun_name: str
+    tpgt: Tpgt
+    image: Image
     object_path: str
     read_mbytes: int
     read_iops: int
 
 
 @dataclass
-class NodeErrorReport:
+class NodeError:
     node: str
     source: str
     severity: str
     message: str
-
-
-@dataclass
-class TpgtInfo:
-    tag: int
-    tpgt_name: str
 
 
 # Error Classes
