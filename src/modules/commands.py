@@ -375,7 +375,7 @@ def cmd_describe_node(args) -> None:
                 [summary], formatter=format_initiator_summary, out_file=args.out_file
             )
         elif role == "target":
-            summary = build_target_node_summary(node_name, with_metrics=False)
+            summary = build_target_node_summary(node_name, with_metrics=args.metrics)
             emit_output(
                 [summary], formatter=format_target_summary, out_file=args.out_file
             )
@@ -385,7 +385,11 @@ def cmd_describe_node(args) -> None:
         target_nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
         with ThreadPoolExecutor(max_workers=min(32, len(target_nodes))) as executor:
             target_summaries = list(
-                executor.map(build_target_node_summary, target_nodes)
+                executor.map(
+                    build_target_node_summary,
+                    target_nodes,
+                    [args.metrics] * len(target_nodes),
+                )
             )
 
         initiator_nodes = get_kubernetes_nodes(DEFAULT_INITIATOR_SELECTOR)

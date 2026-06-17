@@ -169,6 +169,22 @@ def format_target_summary(summaries: list[dict]) -> str:
                 ]
             )
 
+        config_versions = summary.get("config_versions", [])
+        if config_versions:
+            lines.extend(
+                [
+                    "",
+                    "Backup Configurations",
+                    render_table(
+                        ["DATE", "FILE", "PATH"],
+                        [
+                            [date, Path(filepath).name, filepath]
+                            for filepath, date in config_versions
+                        ]
+                    ),
+                ]
+            )
+
         sections.append("\n".join(lines))
 
     return "\n\n".join(sections)
@@ -204,6 +220,16 @@ def format_initiator_summary(summaries: list[dict]) -> str:
                     f"- {target} | Portal: {portal} | "
                     f"State: {state} | Devices: {device_count}"
                 )
+
+        mounts = summary.get("mounts", [])
+        if mounts:
+            lines.extend(
+                [
+                    "",
+                    "Mount status:",
+                    _format_mount_status_table(mounts),
+                ]
+            )
 
         if summary.get("errors"):
             lines.extend(["", "Warnings:"])

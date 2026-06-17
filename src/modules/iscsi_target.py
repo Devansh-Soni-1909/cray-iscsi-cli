@@ -759,6 +759,15 @@ def build_target_node_summary(
     }
 
     try:
+        current_config_path, versions = list_config_versions(node)
+        summary["config_versions"] = versions
+        if current_config_path:
+            summary["config_file"] = Path(current_config_path).name
+            summary["file_path"] = current_config_path
+    except Exception as exc:
+        summary["errors"].append(f"Failed to list configuration versions: {exc}")
+
+    try:
         current_config = get_saveconfig(node)
     except TargetConfigurationError as current_error:
         summary["errors"].append(str(current_error))

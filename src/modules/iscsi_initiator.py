@@ -179,6 +179,12 @@ def build_initiator_node_summary(node: str) -> dict:
     except Exception as exc:
         errors.append(str(exc))
 
+    mounts = []
+    try:
+        mounts = collect_initiator_mount_entries(node)
+    except Exception as exc:
+        errors.append(str(exc))
+
     return {
         "node": node,
         "role": "initiator",
@@ -188,6 +194,7 @@ def build_initiator_node_summary(node: str) -> dict:
         "unmounted": stats.get("unmounted", 0),
         "session_lines": stats.get("session_lines", []),
         "session_details": stats.get("session_details", []),
+        "mounts": mounts,
         "diagnostics": [diagnostic.__dict__ for diagnostic in diagnostics],
         "errors": errors,
     }
