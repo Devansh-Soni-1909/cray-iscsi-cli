@@ -119,55 +119,51 @@ def format_target_summary(summaries: list[dict]) -> str:
                 ]
             )
 
-        images = summary.get("luns", summary.get("images", []))
-        if images:
-            headers = [
-                "IQN",
-                "TPGT",
-                "LUN",
-                "Type",
-                "Image",
-            ]
-
+        luns = summary.get("luns", [])
+        if luns:
+            headers = ["IQN", "TPGT", "LUN ID", "LUN Name", "Storage Object"]
             if with_metrics:
-                headers.extend(
-                    [
-                        "Read MBytes",
-                        "Read IOPs",
-                    ]
-                )
-
+                headers.extend(["Read MBytes", "Read IOPs"])
             rows = []
-
-            for lun in images:
+            for lun in luns:
                 tpgt = lun.get("tpgt", {})
-                image = lun.get("image", {})
-
                 row = [
                     tpgt.get("iqn", ""),
                     tpgt.get("tpgt_name", ""),
                     str(lun.get("lun_id", "")),
-                    image.get("image_type", ""),
-                    image.get("image_name", ""),
+                    lun.get("lun_name", ""),
+                    lun.get("object_path", ""),
                 ]
-
                 if with_metrics:
-                    row.extend(
-                        [
-                            str(lun.get("read_mbytes", 0)),
-                            str(lun.get("read_iops", 0)),
-                        ]
-                    )
-
+                    row.extend([str(lun.get("read_mbytes", 0)), str(lun.get("read_iops", 0))])
                 rows.append(row)
+            lines.extend(["", "LUNs", render_table(headers, rows)])
 
-            lines.extend(
-                [
-                    "",
-                    "LUNs and images",
-                    render_table(headers, rows),
+        images_list = list(summary.get("images", []))
+        if not images_list and luns:
+            seen_img = set()
+            for lun in luns:
+                img = lun.get("image", {})
+                img_name = img.get("image_name")
+                if img_name and img_name not in seen_img:
+                    seen_img.add(img_name)
+                    images_list.append(img)
+
+        if images_list:
+            headers = ["Image Name", "Type", "udev_path"]
+            if with_metrics:
+                headers.extend(["Read MBytes", "Read IOPs"])
+            rows = []
+            for img in images_list:
+                row = [
+                    img.get("image_name", ""),
+                    img.get("image_type", ""),
+                    img.get("udev_path", ""),
                 ]
-            )
+                if with_metrics:
+                    row.extend([str(img.get("read_mbytes", 0)), str(img.get("read_iops", 0))])
+                rows.append(row)
+            lines.extend(["", "Images", render_table(headers, rows)])
 
         config_versions = summary.get("config_versions", [])
         if config_versions:
@@ -477,27 +473,26 @@ def format_target_metrics(summaries: list[dict]) -> str:
         lines.append("")
         lines.append("LUN read metrics")
 
-        images = summary.get("luns", summary.get("images", []))
-        if images:
+        luns = summary.get("luns", [])
+        if luns:
             rows = [
                 [
                     lun.get("tpgt", {}).get("iqn", ""),
                     lun.get("tpgt", {}).get("tpgt_name", ""),
                     str(lun.get("lun_id", "")),
-                    lun.get("image", {}).get("image_name", ""),
+                    lun.get("lun_name", ""),
                     str(lun.get("read_mbytes", 0)),
                     str(lun.get("read_iops", 0)),
                 ]
-                for lun in images
+                for lun in luns
             ]
-
             lines.append(
                 render_table(
                     [
                         "IQN",
                         "TPGT",
-                        "LUN",
-                        "Image",
+                        "LUN ID",
+                        "LUN Name",
                         "Read MBytes",
                         "Read IOPs",
                     ],
@@ -506,6 +501,45 @@ def format_target_metrics(summaries: list[dict]) -> str:
             )
         else:
             lines.append("No LUN metrics found.")
+
+        lines.append("")
+        lines.append("Image read metrics")
+
+        images_list = list(summary.get("images", []))
+        if not images_list and luns:
+            seen_img = set()
+            for lun in luns:
+                img = lun.get("image", {})
+                img_name = img.get("image_name")
+                if img_name and img_name not in seen_img:
+                    seen_img.add(img_name)
+                    images_list.append(img)
+
+        if images_list:
+            rows = [
+                [
+                    img.get("image_name", ""),
+                    img.get("image_type", ""),
+                    img.get("udev_path", ""),
+                    str(img.get("read_mbytes", 0)),
+                    str(img.get("read_iops", 0)),
+                ]
+                for img in images_list
+            ]
+            lines.append(
+                render_table(
+                    [
+                        "Image Name",
+                        "Type",
+                        "udev_path",
+                        "Read MBytes",
+                        "Read IOPs",
+                    ],
+                    rows,
+                )
+            )
+        else:
+            lines.append("No image metrics found.")
 
         deleted_images = summary.get("deleted_images", [])
 

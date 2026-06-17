@@ -731,6 +731,13 @@ def build_target_node_summary(
     except Exception as exc:
         errors.append(str(exc))
 
+    images: List[Image] = []
+    try:
+        images, _, img_errors = collect_target_images(node, with_metrics)
+        errors.extend(img_errors)
+    except Exception as exc:
+        errors.append(str(exc))
+
     by_type = count_by_type(luns)
 
     diagnostics, diagnostic_errors = collect_node_diagnostics(node)
@@ -743,13 +750,14 @@ def build_target_node_summary(
         "tpgts": tpgts,
         "tpgt_count": len(tpgts),
         "lun_count": len(luns),
-        "total_active_images": len(luns),
+        "total_active_images": len(images),
         "rootfs_count": by_type.get("rootfs", 0),
         "pe_count": by_type.get("pe", 0),
         "unknown_count": by_type.get("unknown", 0),
         "read_mbytes": sum_metric(luns, "read_mbytes"),
         "read_iops": sum_metric(luns, "read_iops"),
         "luns": [asdict(lun) for lun in luns],
+        "images": [asdict(img) for img in images],
         "diagnostics": [asdict(diagnostic) for diagnostic in diagnostics],
         "errors": errors,
         "with_metrics": with_metrics,
