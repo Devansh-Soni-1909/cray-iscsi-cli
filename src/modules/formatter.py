@@ -564,7 +564,6 @@ def format_target_metrics(summaries: list[dict]) -> str:
 
 def format_initiator_metrics(summaries: list[dict]) -> str:
     sections = []
-
     for summary in summaries:
         lines = [
             f"Node: {summary.get('node', 'unknown')}",
@@ -577,7 +576,6 @@ def format_initiator_metrics(summaries: list[dict]) -> str:
         ]
 
         session_details = summary.get("session_details", [])
-
         if session_details:
             lines.extend(["", "Session Details"])
 
@@ -590,7 +588,6 @@ def format_initiator_metrics(summaries: list[dict]) -> str:
                         f"  SID: {session.get('sid', 'unknown')}",
                         f"  Connection State: {session.get('connection_state', 'unknown')}",
                         f"  Session State: {session.get('session_state', 'unknown')}",
-                        f"  Host Number: {session.get('host_number', 'unknown')}",
                     ]
                 )
 

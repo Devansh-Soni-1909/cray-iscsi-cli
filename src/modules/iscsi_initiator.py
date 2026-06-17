@@ -83,10 +83,13 @@ def collect_initiator_metrics(node: str) -> dict:
         )
 
     session_details = []
+
     current = None
+    current_lun = None
 
     for line in details_output.splitlines():
         line = line.strip()
+
         if line.startswith("Target:"):
             if current:
                 current["lun_count"] = len(current["devices"])
@@ -103,6 +106,7 @@ def collect_initiator_metrics(node: str) -> dict:
                 "host": "",
                 "devices": [],
             }
+            current_lun = None
 
         elif current is None:
             continue
@@ -119,15 +123,20 @@ def collect_initiator_metrics(node: str) -> dict:
         elif line.startswith("iSCSI Session State:"):
             current["session_state"] = line.split(":", 1)[1].strip()
 
-        elif line.startswith("Host Number:"):
-            match = re.search(r"Host Number:\s*(\d+)", line)
+        elif "Lun:" in line:
+            match = re.search(r"Lun:\s*(\d+)", line)
             if match:
-                current["host"] = match.group(1)
+                current_lun = int(match.group(1))
 
         elif "Attached scsi disk" in line:
             match = re.search(r"Attached scsi disk\s+(\S+)", line)
             if match:
-                current["devices"].append(match.group(1))
+                current["devices"].append(
+                    {
+                        "lun": current_lun,
+                        "disk": match.group(1),
+                    }
+                )
 
     if current:
         current["lun_count"] = len(current["devices"])
