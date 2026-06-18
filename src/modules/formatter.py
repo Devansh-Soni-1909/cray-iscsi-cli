@@ -102,16 +102,12 @@ def format_target_summary(summaries: list[dict]) -> str:
                             "IQN",
                             "TPGT",
                             "LUNs",
-                            "ACLs",
-                            "ACL names",
                         ],
                         [
                             [
                                 tpgt["iqn"],
                                 tpgt["tpgt_name"],
                                 str(tpgt["lun_count"]),
-                                str(tpgt["acl_count"]),
-                                ", ".join(tpgt["acl_names"]) or "None",
                             ]
                             for tpgt in tpgts
                         ],
@@ -121,23 +117,33 @@ def format_target_summary(summaries: list[dict]) -> str:
 
         luns = summary.get("luns", [])
         if luns:
-            headers = ["IQN", "TPGT", "LUN ID", "LUN Name", "Storage Object"]
+            headers = ["LUN", "Mapped Image"]
             if with_metrics:
                 headers.extend(["Read MBytes", "Read IOPs"])
             rows = []
             for lun in luns:
                 tpgt = lun.get("tpgt", {})
                 row = [
-                    tpgt.get("iqn", ""),
-                    tpgt.get("tpgt_name", ""),
-                    str(lun.get("lun_id", "")),
-                    lun.get("lun_name", ""),
-                    lun.get("object_path", ""),
+                    f"lun{str(lun.get('lun_id', ''))}",
+                    lun.get("image", {}).get("udev_path", ""),
                 ]
                 if with_metrics:
-                    row.extend([str(lun.get("read_mbytes", 0)), str(lun.get("read_iops", 0))])
+                    row.extend(
+                        [str(lun.get("read_mbytes", 0)), str(lun.get("read_iops", 0))]
+                    )
                 rows.append(row)
-            lines.extend(["", "LUNs", render_table(headers, rows)])
+
+            iqn = luns[0].get("tpgt", {}).get("iqn", "")
+            tpgt = luns[0].get("tpgt", {}).get("tpgt_name", "")
+            lines.extend(
+                [
+                    "",
+                    "LUNs",
+                    f"IQN: {iqn}",
+                    f"TPGT: {tpgt}",
+                    render_table(headers, rows),
+                ]
+            )
 
         images_list = list(summary.get("images", []))
         if not images_list and luns:
@@ -150,7 +156,7 @@ def format_target_summary(summaries: list[dict]) -> str:
                     images_list.append(img)
 
         if images_list:
-            headers = ["Image Name", "Type", "udev_path"]
+            headers = ["Image Name", "Type", "Image Path"]
             if with_metrics:
                 headers.extend(["Read MBytes", "Read IOPs"])
             rows = []
@@ -161,25 +167,11 @@ def format_target_summary(summaries: list[dict]) -> str:
                     img.get("udev_path", ""),
                 ]
                 if with_metrics:
-                    row.extend([str(img.get("read_mbytes", 0)), str(img.get("read_iops", 0))])
+                    row.extend(
+                        [str(img.get("read_mbytes", 0)), str(img.get("read_iops", 0))]
+                    )
                 rows.append(row)
             lines.extend(["", "Images", render_table(headers, rows)])
-
-        config_versions = summary.get("config_versions", [])
-        if config_versions:
-            lines.extend(
-                [
-                    "",
-                    "Backup Configurations",
-                    render_table(
-                        ["DATE", "FILE", "PATH"],
-                        [
-                            [date, Path(filepath).name, filepath]
-                            for filepath, date in config_versions
-                        ]
-                    ),
-                ]
-            )
 
         sections.append("\n".join(lines))
 
@@ -248,6 +240,9 @@ def format_luns_output(payload: dict) -> str:
         lines.append(f"Node: {payload['node']}")
         lines.append(f"Role: {payload.get('role', 'target')}")
         luns = payload.get("luns", [])
+        tpgt = luns[0].get("tpgt", {})
+        lines.append(f"IQN: {tpgt.get("iqn","")}")
+        lines.append(f"TPGT: {tpgt.get("tpgt_name","")}")
         image_filter = payload.get("image_type", "all")
         if image_filter != "all":
             lines.append(f"Filter: {image_filter}")
@@ -255,27 +250,16 @@ def format_luns_output(payload: dict) -> str:
         if luns:
             with_metrics = payload.get("with_metrics", False)
             headers = [
-                "IQN",
-                "TPGT",
                 "LUN ID",
-                "LUN Name",
-                "Type",
-                "Image",
-                "udev_path",
+                "Mapped Image",
             ]
             if with_metrics:
                 headers.extend(["Read MBytes", "Read IOPs"])
             rows = []
             for lun in luns:
-                tpgt = lun.get("tpgt", {})
                 image = lun.get("image", {})
                 row = [
-                    tpgt.get("iqn", ""),
-                    tpgt.get("tpgt_name", ""),
-                    str(lun.get("lun_id", "")),
-                    lun.get("lun_name", ""),
-                    image.get("image_type", ""),
-                    image.get("image_name", ""),
+                    f"lun{str(lun.get('lun_id', ''))}",
                     image.get("udev_path", ""),
                 ]
                 if with_metrics:
@@ -339,7 +323,7 @@ def format_images_output(payload: dict) -> str:
         lines.append(f"Images: {payload.get('count', len(images))}")
         if images:
             with_metrics = payload.get("with_metrics", False)
-            headers = ["Image Name", "Type", "udev_path"]
+            headers = ["Image Name", "Type", "Image Path"]
             if with_metrics:
                 headers.extend(["Read MBytes", "Read IOPs"])
             rows = []
@@ -475,12 +459,14 @@ def format_target_metrics(summaries: list[dict]) -> str:
 
         luns = summary.get("luns", [])
         if luns:
+            iqn = luns[0].get("tpgt", {}).get("iqn", "")
+            tpgt = luns[0].get("tpgt", {}).get("tpgt_name", "")
+            lines.append(f"IQN: {iqn}")
+            lines.append(f"TPGT: {tpgt}")
             rows = [
                 [
-                    lun.get("tpgt", {}).get("iqn", ""),
-                    lun.get("tpgt", {}).get("tpgt_name", ""),
-                    str(lun.get("lun_id", "")),
-                    lun.get("lun_name", ""),
+                    f"lun{str(lun.get('lun_id', ''))}",
+                    lun.get("image", {}).get("udev_path", ""),
                     str(lun.get("read_mbytes", 0)),
                     str(lun.get("read_iops", 0)),
                 ]
@@ -489,10 +475,8 @@ def format_target_metrics(summaries: list[dict]) -> str:
             lines.append(
                 render_table(
                     [
-                        "IQN",
-                        "TPGT",
-                        "LUN ID",
-                        "LUN Name",
+                        "LUN",
+                        "Mapped Image",
                         "Read MBytes",
                         "Read IOPs",
                     ],
@@ -531,7 +515,7 @@ def format_target_metrics(summaries: list[dict]) -> str:
                     [
                         "Image Name",
                         "Type",
-                        "udev_path",
+                        "Image Path",
                         "Read MBytes",
                         "Read IOPs",
                     ],
@@ -544,7 +528,7 @@ def format_target_metrics(summaries: list[dict]) -> str:
         deleted_images = summary.get("deleted_images", [])
 
         lines.append("")
-        lines.append("Removed images since backup comparison")
+        lines.append("Removed images (wrt previous configuration)")
 
         if deleted_images:
             rows = [
@@ -562,12 +546,6 @@ def format_target_metrics(summaries: list[dict]) -> str:
                     rows,
                 )
             )
-
-            comparison_source = summary.get("comparison_source")
-            if comparison_source:
-                lines.append("")
-                lines.append("Comparison source")
-                lines.append(comparison_source)
         else:
             lines.append("None")
 
@@ -575,36 +553,16 @@ def format_target_metrics(summaries: list[dict]) -> str:
 
         if comparison_summary:
             lines.append("")
-            lines.append("Snapshot change summary")
-
             lines.append(
                 render_table(
                     [
-                        "IQNs +",
-                        "IQNs -",
-                        "TPGTs +",
-                        "TPGTs -",
-                        "LUNs +",
-                        "LUNs -",
-                        "ACLs +",
-                        "ACLs -",
-                        "Storage +",
-                        "Storage -",
-                        "Rootfs -",
-                        "PE -",
+                        "Total Deleted",
+                        "Deleted rootfs Images",
+                        "Deleted pe Images",
                     ],
                     [
                         [
-                            str(comparison_summary.get("iqns_added", 0)),
-                            str(comparison_summary.get("iqns_removed", 0)),
-                            str(comparison_summary.get("tpgs_added", 0)),
-                            str(comparison_summary.get("tpgs_removed", 0)),
-                            str(comparison_summary.get("luns_added", 0)),
-                            str(comparison_summary.get("luns_removed", 0)),
-                            str(comparison_summary.get("acls_added", 0)),
-                            str(comparison_summary.get("acls_removed", 0)),
-                            str(comparison_summary.get("storage_objects_added", 0)),
-                            str(comparison_summary.get("storage_objects_removed", 0)),
+                            str(comparison_summary.get("images_removed", 0)),
                             str(comparison_summary.get("rootfs_deleted", 0)),
                             str(comparison_summary.get("pe_deleted", 0)),
                         ]
@@ -620,61 +578,6 @@ def format_target_metrics(summaries: list[dict]) -> str:
         sections.append("\n".join(lines))
 
     return ("\n\n").join(sections)
-
-
-def format_initiator_metrics(summaries: list[dict]) -> str:
-    sections = []
-    for summary in summaries:
-        lines = [
-            f"Node: {summary.get('node', 'unknown')}",
-            "Role: initiator",
-            "",
-            f"Sessions: {summary.get('sessions', 0)}",
-            f"Total mounts: {summary.get('total', 0)}",
-            f"Mounted: {summary.get('mounted', 0)}",
-            f"Unmounted: {summary.get('unmounted', 0)}",
-        ]
-
-        session_details = summary.get("session_details", [])
-        if session_details:
-            lines.extend(["", "Session Details"])
-
-            for session in session_details:
-                lines.extend(
-                    [
-                        "",
-                        f"Target: {session.get('target', 'unknown')}",
-                        f"  Portal: {session.get('portal', 'unknown')}",
-                        f"  SID: {session.get('sid', 'unknown')}",
-                        f"  Connection State: {session.get('connection_state', 'unknown')}",
-                        f"  Session State: {session.get('session_state', 'unknown')}",
-                    ]
-                )
-
-                devices = session.get("devices", [])
-                if devices:
-                    lines.append("  Devices:")
-
-                    for device in devices:
-                        lines.append(
-                            f"    LUN {device.get('lun', '?')}: {device.get('disk', '?')}"
-                        )
-
-        if summary.get("errors"):
-            lines.extend(["", "Warnings"])
-
-            for error in summary["errors"]:
-                lines.append(f"- {error}")
-
-        sections.append("\n".join(lines))
-
-    return "\n\n".join(sections)
-
-
-def format_both_metrics(summaries: tuple[list[dict], list[dict]]) -> str:
-    target_summary = format_target_metrics(summaries[0])
-    initiator_summary = format_initiator_metrics(summaries[1])
-    return "\n\n".join([target_summary, initiator_summary])
 
 
 def format_error_summary(payload: dict) -> str:

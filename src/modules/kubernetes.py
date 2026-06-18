@@ -77,6 +77,7 @@ def run_kubectl_json(command: str) -> dict:
         raise KubernetesError(f"Invalid JSON from kubectl command '{command}': {exc}")
 
 
+# revisit: use sat status --filter role=compute
 def get_kubernetes_nodes(
     node_selector: str, full_info: bool = False
 ) -> List[str] | Dict[str, Dict]:

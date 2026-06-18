@@ -49,8 +49,6 @@ from .formatter import (
     format_initiator_summary,
     format_both_summaries,
     format_target_metrics,
-    format_initiator_metrics,
-    format_both_metrics,
     emit_output,
 )
 
@@ -75,29 +73,16 @@ except Exception:
 
 def cmd_get_nodes(args) -> None:
     label = None
-    if (args.target and args.initiator) or (not args.target and not args.initiator):
-        target_nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR, full_info=True)
-        for node in target_nodes.keys():
-            target_nodes[node]["role"] = "target"
-
-        initiator_nodes = get_kubernetes_nodes(
-            DEFAULT_INITIATOR_SELECTOR, full_info=True
-        )
-        for node in initiator_nodes.keys():
-            initiator_nodes[node]["role"] = "initiator"
-
-        label = f"{DEFAULT_INITIATOR_SELECTOR, DEFAULT_TARGET_SELECTOR}"
-        nodes = target_nodes | initiator_nodes
-    elif args.target:
-        label = DEFAULT_TARGET_SELECTOR
-        nodes = get_kubernetes_nodes(label, full_info=True)
-        for node in nodes.keys():
-            nodes[node]["role"] = "target"
-    elif args.initiator:
+    if args.initiator:
         label = DEFAULT_INITIATOR_SELECTOR
         nodes = get_kubernetes_nodes(label, full_info=True)
         for node in nodes.keys():
             nodes[node]["role"] = "initiator"
+    else:
+        label = DEFAULT_TARGET_SELECTOR
+        nodes = get_kubernetes_nodes(label, full_info=True)
+        for node in nodes.keys():
+            nodes[node]["role"] = "target"
 
     emit_output(
         {"label": label, "nodes": nodes},
@@ -106,56 +91,21 @@ def cmd_get_nodes(args) -> None:
     )
 
 
-def cmd_get_configs(args) -> None:
-    if args.name:
-        labels = get_node_labels(args.name)
-        role = detect_node_role(labels=labels)
-        if role != "target":
-            raise CLIParameterError(
-                f"{args.name}: role is '{role}', this command is only valid for target nodes"
-            )
-        current, versions = list_config_versions(args.name)
-        emit_output(
-            [{"node": args.name, "current_config": current, "versions": versions}],
-            formatter=format_configs_output,
-            out_file=args.out_file,
-        )
-    else:
-        nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
-
-        def collect_node_config(node: str) -> dict:
-            current, versions = list_config_versions(node)
-            return {
-                "node": node,
-                "current_config": current,
-                "versions": versions,
-            }
-
-        with ThreadPoolExecutor(max_workers=min(32, len(nodes))) as executor:
-            payload = list(executor.map(collect_node_config, nodes))
-
-        emit_output(
-            payload,
-            formatter=format_configs_output,
-            out_file=args.out_file,
-        )
-
-
 def cmd_get_luns(args) -> None:
     with_metrics = True if args.metrics else False
-    if args.name:
-        labels = get_node_labels(args.name)
+    if args.node:
+        labels = get_node_labels(args.node)
         role = detect_node_role(labels)
         if role != "target":
             raise CLIParameterError(
-                f"{args.name}: role is '{role}', this command is only valid for target nodes"
+                f"{args.node}: role is '{role}', this command is only valid for target nodes"
             )
-        luns, _, errors = collect_target_luns(args.name, with_metrics)
+        luns, _, errors = collect_target_luns(args.node, with_metrics)
         luns = filter_images(luns, args.image_type)
         if errors:
-            raise TargetConfigurationError(args.name, "; ".join(errors))
+            raise TargetConfigurationError(args.node, "; ".join(errors))
         payload = {
-            "node": args.name,
+            "node": args.node,
             "role": role,
             "luns": [asdict(lun) for lun in luns],
             "count": len(luns),
@@ -178,17 +128,17 @@ def cmd_get_luns(args) -> None:
 
 def cmd_get_tpgts(args) -> None:
     with_metrics = False
-    if args.name:
-        labels = get_node_labels(args.name)
+    if args.node:
+        labels = get_node_labels(args.node)
         role = detect_node_role(labels)
         if role != "target":
             raise CLIParameterError(
-                f"{args.name}: role is '{role}', this command is only valid for target nodes"
+                f"{args.node}: role is '{role}', this command is only valid for target nodes"
             )
-        tpgts, errors = collect_target_tpgts(args.name, with_metrics)
+        tpgts, errors = collect_target_tpgts(args.node, with_metrics)
         if errors:
-            raise TargetConfigurationError(args.name, "; ".join(errors))
-        payload = {"node": args.name, "role": role, "tpgts": tpgts, "count": len(tpgts)}
+            raise TargetConfigurationError(args.node, "; ".join(errors))
+        payload = {"node": args.node, "role": role, "tpgts": tpgts, "count": len(tpgts)}
     else:
         nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
         payload = {"nodes": collect_summaries_concurrently(nodes, with_metrics)}
@@ -197,20 +147,20 @@ def cmd_get_tpgts(args) -> None:
 
 def cmd_get_images(args) -> None:
     with_metrics = True if args.metrics else False
-    if args.name:
-        labels = get_node_labels(args.name)
+    if args.node:
+        labels = get_node_labels(args.node)
         role = detect_node_role(labels)
         if role != "target":
             raise CLIParameterError(
-                f"{args.name}: role is '{role}', this command is only valid for target nodes"
+                f"{args.node}: role is '{role}', this command is only valid for target nodes"
             )
-        images, tpgts, errors = collect_target_images(args.name, with_metrics)
+        images, tpgts, errors = collect_target_images(args.node, with_metrics)
         if args.image_type != "all":
             images = [img for img in images if img.image_type == args.image_type]
         if errors:
-            raise TargetConfigurationError(args.name, "; ".join(errors))
+            raise TargetConfigurationError(args.node, "; ".join(errors))
         payload = {
-            "node": args.name,
+            "node": args.node,
             "role": role,
             "images": [asdict(img) for img in images],
             "tpgts": tpgts,
@@ -244,14 +194,11 @@ def cmd_get_images(args) -> None:
 
 
 def cmd_get_metrics(args) -> None:
-    if args.name:
-        node_name = args.name
+    if args.node:
+        node_name = args.node
         labels = get_node_labels(node_name)
         role = detect_node_role(labels)
-        if role == "initiator":
-            summary = build_initiator_node_summary(node_name)
-            emit_output([summary], formatter=format_initiator_metrics)
-        elif role == "target":
+        if role == "target":
             summary = build_target_node_summary(
                 node_name, with_metrics=True, compare_config=args.config_file
             )
@@ -259,35 +206,32 @@ def cmd_get_metrics(args) -> None:
                 [summary], formatter=format_target_metrics, out_file=args.out_file
             )
         else:
-            raise CLIParameterError(f"{node_name}: unknown role, cannot fetch metrics")
+            raise CLIParameterError(f"{node_name}: Role = {role}, cannot fetch metrics")
     else:
         target_nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
         with ThreadPoolExecutor(max_workers=min(32, len(target_nodes))) as executor:
             target_summaries = list(
-                executor.map(build_target_node_summary, target_nodes)
+                executor.map(
+                    build_target_node_summary, target_nodes, [True] * len(target_nodes)
+                )
             )
 
-        initiator_nodes = get_kubernetes_nodes(DEFAULT_INITIATOR_SELECTOR)
-        with ThreadPoolExecutor(max_workers=min(32, len(initiator_nodes))) as executor:
-            initiator_summaries = list(
-                executor.map(build_initiator_node_summary, initiator_nodes)
-            )
         emit_output(
-            payload=(target_summaries, initiator_summaries),
-            formatter=format_both_metrics,
+            payload=target_summaries,
+            formatter=format_target_metrics,
             out_file=args.out_file,
         )
 
 
 def cmd_get_sessions(args) -> None:
-    if args.name:
-        labels = get_node_labels(args.name)
+    if args.node:
+        labels = get_node_labels(args.node)
         role = detect_node_role(labels)
         if role != "initiator":
             raise CLIParameterError(
-                f"{args.name}: role is '{role}', this command is only valid for initiator nodes"
+                f"{args.node}: role is '{role}', this command is only valid for initiator nodes"
             )
-        payload = build_initiator_node_summary(args.name)
+        payload = build_initiator_node_summary(args.node)
     else:
         nodes = get_kubernetes_nodes(DEFAULT_INITIATOR_SELECTOR)
         payload = {"nodes": collect_initiator_summaries_concurrently(nodes)}
@@ -295,23 +239,58 @@ def cmd_get_sessions(args) -> None:
 
 
 def cmd_get_mount_status(args) -> None:
-    if args.name:
-        labels = get_node_labels(args.name)
+    if args.node:
+        labels = get_node_labels(args.node)
         role = detect_node_role(labels)
         if role != "initiator":
             raise CLIParameterError(
-                f"{args.name}: role is '{role}', this command is only valid for initiator nodes"
+                f"{args.node}: role is '{role}', this command is only valid for initiator nodes"
             )
-        payload = build_initiator_mount_status(args.name)
+        payload = build_initiator_mount_status(args.node)
     else:
         nodes = get_kubernetes_nodes(DEFAULT_INITIATOR_SELECTOR)
         payload = {"nodes": collect_initiator_mount_status_concurrently(nodes)}
     emit_output(payload, formatter=format_mount_status_output, out_file=args.out_file)
 
 
+def cmd_get_configs(args) -> None:
+    if args.node:
+        labels = get_node_labels(args.node)
+        role = detect_node_role(labels=labels)
+        if role != "target":
+            raise CLIParameterError(
+                f"{args.node}: role is '{role}', this command is only valid for target nodes"
+            )
+        current, versions = list_config_versions(args.node)
+        emit_output(
+            [{"node": args.node, "current_config": current, "versions": versions}],
+            formatter=format_configs_output,
+            out_file=args.out_file,
+        )
+    else:
+        nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
+
+        def collect_node_config(node: str) -> dict:
+            current, versions = list_config_versions(node)
+            return {
+                "node": node,
+                "current_config": current,
+                "versions": versions,
+            }
+
+        with ThreadPoolExecutor(max_workers=min(32, len(nodes))) as executor:
+            payload = list(executor.map(collect_node_config, nodes))
+
+        emit_output(
+            payload,
+            formatter=format_configs_output,
+            out_file=args.out_file,
+        )
+
+
 def cmd_get_errors(args) -> None:
-    if args.name:
-        payload = collect_error_summary(args.name, args.lines)
+    if args.node:
+        payload = collect_error_summary(args.node, args.lines)
     else:
         target_nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
         initiator_nodes = get_kubernetes_nodes(DEFAULT_INITIATOR_SELECTOR)
@@ -365,8 +344,8 @@ def cmd_set_label(args) -> None:
 
 # describe commands
 def cmd_describe_node(args) -> None:
-    if args.name:
-        node_name = args.name
+    if args.node:
+        node_name = args.node
         labels = get_node_labels(node_name)
         role = detect_node_role(labels)
         if role == "initiator":
@@ -404,6 +383,7 @@ def cmd_describe_node(args) -> None:
         )
 
 
+# NOT USED
 def cmd_describe_config(args) -> None:
     if args.node:
         if args.file_path:

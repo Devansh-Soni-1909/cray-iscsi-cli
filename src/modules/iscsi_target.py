@@ -185,15 +185,25 @@ def list_luns(node: str, iqn: str, tpgt_tag: int) -> Tuple[List[Lun], List[str]]
                             if "index" not in lun_entry:
                                 continue
                             lun_index = lun_entry["index"]
-                            parts = lun_entry.get("storage_object", "").rstrip("/").split("/")
+                            parts = (
+                                lun_entry.get("storage_object", "")
+                                .rstrip("/")
+                                .split("/")
+                            )
                             if len(parts) < 2:
                                 continue
                             plugin = parts[-2]
                             storage_name = parts[-1]
-                            udev_path, error = get_image_udev_path(node, plugin, storage_name)
+                            udev_path, error = get_image_udev_path(
+                                node, plugin, storage_name
+                            )
                             if error:
                                 return [], [error]
-                            image_name = udev_path.rstrip("/").split("/")[-1] if udev_path else storage_name
+                            image_name = (
+                                udev_path.rstrip("/").split("/")[-1]
+                                if udev_path
+                                else storage_name
+                            )
                             image_type = infer_image_type(udev_path or storage_name)
                             image_obj = Image(
                                 node=node,
@@ -266,15 +276,25 @@ def list_images(node: str, iqn: str, tpgt_tag: int) -> Tuple[List[Image], List[s
                         for lun_entry in tpg.get("luns", []):
                             if "index" not in lun_entry:
                                 continue
-                            parts = lun_entry.get("storage_object", "").rstrip("/").split("/")
+                            parts = (
+                                lun_entry.get("storage_object", "")
+                                .rstrip("/")
+                                .split("/")
+                            )
                             if len(parts) < 2:
                                 continue
                             plugin = parts[-2]
                             storage_name = parts[-1]
-                            udev_path, error = get_image_udev_path(node, plugin, storage_name)
+                            udev_path, error = get_image_udev_path(
+                                node, plugin, storage_name
+                            )
                             if error:
                                 return [], [error]
-                            image_name = udev_path.rstrip("/").split("/")[-1] if udev_path else storage_name
+                            image_name = (
+                                udev_path.rstrip("/").split("/")[-1]
+                                if udev_path
+                                else storage_name
+                            )
                             image_type = infer_image_type(udev_path or storage_name)
                             images.append(
                                 Image(
@@ -478,9 +498,9 @@ def compare_snapshots(
         - previous_snapshot.get("acls", set()),
         "acls_removed": previous_snapshot.get("acls", set())
         - current_snapshot.get("acls", set()),
-        "storage_objects_added": current_snapshot.get("storage_objects", set())
+        "images_added": current_snapshot.get("storage_objects", set())
         - previous_snapshot.get("storage_objects", set()),
-        "storage_objects_removed": previous_snapshot.get("storage_objects", set())
+        "images_removed": previous_snapshot.get("storage_objects", set())
         - current_snapshot.get("storage_objects", set()),
         "rootfs_deleted": previous_snapshot.get("rootfs_images", set())
         - current_snapshot.get("rootfs_images", set()),
@@ -515,9 +535,7 @@ def collect_target_luns(
         errors.append(str(exc))
         return [], [], errors
 
-    def _collect_tpgt(
-        iqn: str, tpgt_tag: int
-    ) -> Tuple[dict, List[Lun], List[str]]:
+    def _collect_tpgt(iqn: str, tpgt_tag: int) -> Tuple[dict, List[Lun], List[str]]:
         tpgt_errors: List[str] = []
 
         lun_results, lun_errors = list_luns(node, iqn, tpgt_tag)
@@ -532,9 +550,7 @@ def collect_target_luns(
                 return lun, data
 
             with ThreadPoolExecutor(max_workers=10) as executor:
-                futures = [
-                    executor.submit(fetch_lun_stats, lun) for lun in lun_results
-                ]
+                futures = [executor.submit(fetch_lun_stats, lun) for lun in lun_results]
                 for future in as_completed(futures):
                     try:
                         lun, data = future.result()
@@ -591,9 +607,7 @@ def collect_target_images(
         errors.append(str(exc))
         return [], [], errors
 
-    def _collect_tpgt(
-        iqn: str, tpgt_tag: int
-    ) -> Tuple[dict, List[Image], List[str]]:
+    def _collect_tpgt(iqn: str, tpgt_tag: int) -> Tuple[dict, List[Image], List[str]]:
         tpgt_errors: List[str] = []
 
         image_results, image_errors = list_images(node, iqn, tpgt_tag)
@@ -812,8 +826,8 @@ def build_target_node_summary(
         "luns_removed": len(delta["luns_removed"]),
         "acls_added": len(delta["acls_added"]),
         "acls_removed": len(delta["acls_removed"]),
-        "storage_objects_added": len(delta["storage_objects_added"]),
-        "storage_objects_removed": len(delta["storage_objects_removed"]),
+        "images_added": len(delta["images_added"]),
+        "images_removed": len(delta["images_removed"]),
         "rootfs_deleted": len(delta["rootfs_deleted"]),
         "pe_deleted": len(delta["pe_deleted"]),
     }
@@ -891,7 +905,9 @@ def build_backup_config_summary(
 
                 storage_object = storage_by_name.get(storage_name, {})
                 udev_path = storage_object.get("dev", "")
-                image_name = udev_path.rstrip("/").split("/")[-1] if udev_path else storage_name
+                image_name = (
+                    udev_path.rstrip("/").split("/")[-1] if udev_path else storage_name
+                )
                 image_type = infer_image_type(udev_path or storage_name)
 
                 if image_type == "rootfs":

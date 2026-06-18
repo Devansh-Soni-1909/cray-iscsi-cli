@@ -49,12 +49,6 @@ def build_parser() -> argparse.ArgumentParser:
         "nodes", parents=[out_file_parent], help="List iSCSI target nodes"
     )
     nodes_parser.add_argument(
-        "--target",
-        action="store_true",
-        default=False,
-        help="Fetches iSCSI target nodes",
-    )
-    nodes_parser.add_argument(
         "--initiator",
         action="store_true",
         default=False,
@@ -62,20 +56,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     nodes_parser.set_defaults(func=cmd_get_nodes)
 
-    # cmd: get configs
-    configs_parser = get_subparsers.add_parser(
-        "configs",
-        parents=[out_file_parent],
-        help="List all the target node configuration versions",
-    )
-    configs_parser.add_argument("--name", default=None, help="Target node to inspect")
-    configs_parser.set_defaults(func=cmd_get_configs)
-
     # cmd: get luns
     luns_parser = get_subparsers.add_parser(
         "luns", parents=[out_file_parent], help="List LUNs for one or more target nodes"
     )
-    luns_parser.add_argument("--name", default=None, help="Target node to inspect")
+    luns_parser.add_argument(
+        "--node",
+        default=None,
+        help="Target node name; if omitted, all target nodes are queried",
+    )
     luns_parser.add_argument(
         "--image-type",
         choices=["all", "pe", "rootfs"],
@@ -94,7 +83,11 @@ def build_parser() -> argparse.ArgumentParser:
         parents=[out_file_parent],
         help="List TPGTs for one or more target nodes",
     )
-    tpgts_parser.add_argument("--name", default=None, help="Target node to inspect")
+    tpgts_parser.add_argument(
+        "--node",
+        default=None,
+        help="Target node name; if omitted, all target nodes are queried",
+    )
 
     tpgts_parser.set_defaults(func=cmd_get_tpgts)
 
@@ -102,7 +95,11 @@ def build_parser() -> argparse.ArgumentParser:
     images_parser = get_subparsers.add_parser(
         "images", parents=[out_file_parent], help="List projected images"
     )
-    images_parser.add_argument("--name", default=None, help="Target node to inspect")
+    images_parser.add_argument(
+        "--node",
+        default=None,
+        help="Target node name; if omitted, all target nodes are queried",
+    )
     images_parser.add_argument(
         "--image-type",
         choices=["all", "pe", "rootfs"],
@@ -119,7 +116,11 @@ def build_parser() -> argparse.ArgumentParser:
     metrics_parser = get_subparsers.add_parser(
         "metrics", parents=[out_file_parent], help="Show iSCSI metrics"
     )
-    metrics_parser.add_argument("--name", default=None, help="Target node to inspect")
+    metrics_parser.add_argument(
+        "--node",
+        default=None,
+        help="Target node name; if omitted, all target nodes are queried",
+    )
     metrics_parser.add_argument(
         "--config-file",
         default=None,
@@ -133,7 +134,9 @@ def build_parser() -> argparse.ArgumentParser:
         "sessions", parents=[out_file_parent], help="Show initiator mount/session state"
     )
     sessions_parser.add_argument(
-        "--name", default=None, help="Initiator node to inspect"
+        "--node",
+        default=None,
+        help="Initiator node name; if omitted, all initiator nodes are queried",
     )
     sessions_parser.set_defaults(func=cmd_get_sessions)
 
@@ -142,10 +145,25 @@ def build_parser() -> argparse.ArgumentParser:
         "mount-status", parents=[out_file_parent], help="Show initiator mount status"
     )
     mount_status_parser.add_argument(
-        "--name", default=None, help="Initiator node to inspect"
+        "--node",
+        default=None,
+        help="Initiator node name; if omitted, all initiator nodes are queried",
     )
 
     mount_status_parser.set_defaults(func=cmd_get_mount_status)
+
+    # cmd: get configs
+    configs_parser = get_subparsers.add_parser(
+        "configs",
+        parents=[out_file_parent],
+        help="List all the target node configuration versions",
+    )
+    configs_parser.add_argument(
+        "--node",
+        default=None,
+        help="Target node name; if omitted, all target nodes are queried",
+    )
+    configs_parser.set_defaults(func=cmd_get_configs)
 
     # cmd: get errors
     errors_parser = get_subparsers.add_parser(
@@ -153,7 +171,11 @@ def build_parser() -> argparse.ArgumentParser:
         parents=[out_file_parent],
         help="Scan recent logs for storage and network errors",
     )
-    errors_parser.add_argument("--name", default=None, help="Node to inspect")
+    errors_parser.add_argument(
+        "--node",
+        default=None,
+        help="Node name to inspect; if omitted, all discovered nodes are inspected",
+    )
     errors_parser.add_argument(
         "--lines",
         type=int,
@@ -163,7 +185,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     errors_parser.set_defaults(func=cmd_get_errors)
 
-    set_parser = subparsers.add_parser("set", help="Configure node discovery settings")
+    set_parser = subparsers.add_parser(
+        "set", help="Set label for target/initiator nodes"
+    )
     set_subparsers = set_parser.add_subparsers(dest="set_command", required=True)
 
     # cmd: set label
@@ -195,7 +219,7 @@ def build_parser() -> argparse.ArgumentParser:
         parents=[out_file_parent],
         help="Show a detailed iSCSI summary for one node",
     )
-    node_parser.add_argument("--name", default=None, help="Node name to inspect")
+    node_parser.add_argument("--node", default=None, help="Node name to inspect")
     node_parser.add_argument(
         "--metrics", action="store_true", default=False, help="Include LUN metrics"
     )
@@ -203,17 +227,17 @@ def build_parser() -> argparse.ArgumentParser:
     node_parser.set_defaults(func=cmd_describe_node)
 
     # cmd: describe config
-    config_parser = describe_subparsers.add_parser(
-        "config",
-        parents=[out_file_parent],
-        help="Show a detailed summary of the mentioned node",
-    )
-    config_parser.add_argument("--node", default=None, help="None name to inspect")
-    config_parser.add_argument(
-        "--file-path", default=None, help="Path of the configuration file to describe"
-    )
+    # config_parser = describe_subparsers.add_parser(
+    #     "config",
+    #     parents=[out_file_parent],
+    #     help="Show a detailed summary of the mentioned node",
+    # )
+    # config_parser.add_argument("--node", default=None, help="None name to inspect")
+    # config_parser.add_argument(
+    #     "--file-path", default=None, help="Path of the configuration file to describe"
+    # )
 
-    config_parser.set_defaults(func=cmd_describe_config)
+    # config_parser.set_defaults(func=cmd_describe_config)
 
     return parser
 
