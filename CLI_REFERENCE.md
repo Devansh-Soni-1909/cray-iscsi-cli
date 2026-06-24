@@ -40,7 +40,7 @@ iscsi
 | [`iscsi get mount-status`](#get-mount-status) | Mount Status         | Show mount status of disks on initiator nodes |
 | [`iscsi get errors`](#get-errors)             | Logs & Errors        | Scan logs for storage and network errors      |
 | [`iscsi get configs`](#get-configs)           | Target Configuration | List target node configuration versions       |
-| [`iscsi set label`](#set-label)               | Settings             | Configure discovery label selectors           |
+| [`iscsi set label`](#set-label)               | Settings             | Configure node label selectors                |
 | [`iscsi describe node`](#describe-node)       | Description          | Show detailed summary of a specific node      |
 
 ---

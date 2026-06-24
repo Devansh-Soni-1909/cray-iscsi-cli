@@ -193,7 +193,7 @@ def build_parser() -> argparse.ArgumentParser:
     # cmd: set label
     label_parser = set_subparsers.add_parser(
         "label",
-        help="Configure label selectors used to discover target and initiator nodes",
+        help="Configure label selectors used to filter target and initiator nodes",
     )
     label_parser.add_argument(
         "--target",
