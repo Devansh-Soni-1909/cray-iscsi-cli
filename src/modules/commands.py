@@ -7,8 +7,6 @@ from .kubernetes import (
     CLI_CONFIG_PATH,
     get_target_node_label,
     set_target_node_label,
-    get_initiator_node_label,
-    set_initator_node_label,
     get_kubernetes_nodes,
     get_node_labels,
     detect_node_role,
@@ -62,10 +60,7 @@ try:
 except Exception:
     DEFAULT_TARGET_SELECTOR = "iscsi-role=target"
 
-try:
-    DEFAULT_INITIATOR_SELECTOR = get_initiator_node_label()
-except Exception:
-    DEFAULT_INITIATOR_SELECTOR = "iscsi-role=initiator"
+
 
 
 # get commands
@@ -74,8 +69,8 @@ except Exception:
 def cmd_get_nodes(args) -> None:
     label = None
     if args.initiator:
-        label = DEFAULT_INITIATOR_SELECTOR
-        nodes = get_kubernetes_nodes(label, full_info=True)
+        label = f"not {DEFAULT_TARGET_SELECTOR}"
+        nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR, full_info=True, initiator=True)
         for node in nodes.keys():
             nodes[node]["role"] = "initiator"
     else:
@@ -233,7 +228,7 @@ def cmd_get_sessions(args) -> None:
             )
         payload = build_initiator_node_summary(args.node)
     else:
-        nodes = get_kubernetes_nodes(DEFAULT_INITIATOR_SELECTOR)
+        nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR, initiator=True)
         payload = {"nodes": collect_initiator_summaries_concurrently(nodes)}
     emit_output(payload, formatter=format_sessions_output, out_file=args.out_file)
 
@@ -248,7 +243,7 @@ def cmd_get_mount_status(args) -> None:
             )
         payload = build_initiator_mount_status(args.node)
     else:
-        nodes = get_kubernetes_nodes(DEFAULT_INITIATOR_SELECTOR)
+        nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR, initiator=True)
         payload = {"nodes": collect_initiator_mount_status_concurrently(nodes)}
     emit_output(payload, formatter=format_mount_status_output, out_file=args.out_file)
 
@@ -293,11 +288,11 @@ def cmd_get_errors(args) -> None:
         payload = collect_error_summary(args.node, args.lines)
     else:
         target_nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
-        initiator_nodes = get_kubernetes_nodes(DEFAULT_INITIATOR_SELECTOR)
+        initiator_nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR, initiator=True)
         nodes = target_nodes + initiator_nodes
         logs_by_node, errors_by_node = collect_recent_logs_for_nodes(nodes, args.lines)
         payload = {
-            "label": f"{DEFAULT_INITIATOR_SELECTOR, DEFAULT_TARGET_SELECTOR}",
+            "label": f"All the nodes in the cluster",
             "lines": args.lines,
             "nodes": [],
         }
@@ -335,10 +330,8 @@ def cmd_get_errors(args) -> None:
 def cmd_set_label(args) -> None:
     if args.target:
         set_target_node_label(args.target)
-    if args.initiator:
-        set_initator_node_label(args.initiator)
-    if not args.target and not args.initiator:
-        raise CLIParameterError("Provide target/initiator labels")
+    else:
+        raise CLIParameterError("Provide target label")
     print(f"Config saved at {CLI_CONFIG_PATH}")
 
 
@@ -371,7 +364,7 @@ def cmd_describe_node(args) -> None:
                 )
             )
 
-        initiator_nodes = get_kubernetes_nodes(DEFAULT_INITIATOR_SELECTOR)
+        initiator_nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR, initiator=True)
         with ThreadPoolExecutor(max_workers=min(32, len(initiator_nodes))) as executor:
             initiator_summaries = list(
                 executor.map(build_initiator_node_summary, initiator_nodes)

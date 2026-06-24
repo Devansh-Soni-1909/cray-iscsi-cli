@@ -57,7 +57,7 @@ iscsi get nodes  [--initiator] [--out-file OUT_FILE]
 
 #### Description
 
-Lists all discovered target and initiator nodes based on the configured Kubernetes label selectors. If `--initiator` is not specified, it returns target node roles by default.
+Lists all discovered target and initiator nodes based on the configured Kubernetes label selector. If `--initiator` is not specified, it returns target node roles by default.
 
 #### Options
 
@@ -91,7 +91,7 @@ iscsi get nodes --initiator
 ```
 
 ```text
-Nodes matching iscsi-role=initiator: 1
+Nodes matching not iscsi-role=target: 1
 
 NAME     | STATUS | ROLE      | ARCH  | OS    | OS IMAGE
 ---------+--------+-----------+-------+-------+-------------------
@@ -1033,9 +1033,9 @@ Role: target
 TPGTs: 1, LUNs: 10
 
 Image Summary
-Total Images | RootFS | PE | Unknown
--------------+--------+----+--------
-10           | 2      | 8  | 0
+Total Images | RootFS | PE
+-------------+--------+----
+10           | 2      | 8
 
 LUN read metrics
 IQN: iqn.2026-04.lab.local:lab.ncn-w001
@@ -1080,9 +1080,9 @@ Role: target
 TPGTs: 1, LUNs: 10
 
 Image Summary
-Total Images | RootFS | PE | Unknown
--------------+--------+----+--------
-10           | 2      | 8  | 0
+Total Images | RootFS | PE
+-------------+--------+----
+10           | 2      | 8
 
 LUN read metrics
 IQN: iqn.2026-04.lab.local:lab.ncn-w002
@@ -1146,9 +1146,9 @@ Role: target
 TPGTs: 1, LUNs: 10
 
 Image Summary
-Total Images | RootFS | PE | Unknown
--------------+--------+----+--------
-10           | 2      | 8  | 0
+Total Images | RootFS | PE
+-------------+--------+----
+10           | 2      | 8
 
 LUN read metrics
 IQN: iqn.2026-04.lab.local:lab.ncn-w001
@@ -1202,9 +1202,9 @@ Role: target
 TPGTs: 1, LUNs: 10
 
 Image Summary
-Total Images | RootFS | PE | Unknown
--------------+--------+----+--------
-10           | 2      | 8  | 0
+Total Images | RootFS | PE
+-------------+--------+----
+10           | 2      | 8
 
 LUN read metrics
 IQN: iqn.2026-04.lab.local:lab.ncn-w001
@@ -1529,45 +1529,7 @@ iscsi get errors
 ```
 
 ```text
-Label: ('iscsi-role=initiator', 'iscsi-role=target')
-Lines: 200
-
-Node summaries
-Node     | Findings | Log status
----------+----------+-----------
-ncn-w002 | 0        | ok
-ncn-w001 | 0        | ok
-ncn-w003 | 0        | ok
-
-Recent Service Errors
-
-Node: ncn-w002
-
-Service: sbps-marshal.service
-No recent errors found.
-
-Service: target.service
-No recent errors found.
-
-Node: ncn-w001
-
-Service: sbps-marshal.service
-No recent errors found.
-
-Service: target.service
-No recent errors found.
-
-Node: ncn-w003
-
-Service: sbps-marshal.service
-No recent errors found.
-
-Service: target.service
-No recent errors found.
-
-Detected errors
-None
-
+None of the nodes have errors in journalctl, /var/log/messages, /var/log/syslog, dmesg, sbps-marshal.service, target.service, or rtslib-fb-targetctl.service
 ```
 
 ##### iscsi get errors --node \<node-name\>
@@ -1577,30 +1539,7 @@ iscsi get errors --node ncn-w001
 ```
 
 ```text
-Node: ncn-w001
-Lines: 200
-
-Recent Service Errors
-
-sbps-marshal.service
-No recent errors found.
-
-target.service
-No recent errors found.
-
-Detected errors
-None
-
-Recent logs
-Jun 16 14:26:05 ncn-w001 sshd[17565]: Received disconnect from 192.168.122.18 port 33678:11: disconnected by user
-Jun 16 14:26:05 ncn-w001 sshd[17565]: Disconnected from user root 192.168.122.18 port 33678
-Jun 16 14:26:05 ncn-w001 sshd[17565]: pam_unix(sshd:session): session closed for user root
-Jun 16 14:26:05 ncn-w001 systemd-logind[703]: Session 274 logged out. Waiting for processes to exit.
-Jun 16 14:26:05 ncn-w001 systemd[1]: session-274.scope: Deactivated successfully.
-Jun 16 14:26:05 ncn-w001 systemd-logind[703]: Removed session 274.
-Jun 16 14:26:12 ncn-w001 kubelet[867]: I0616 14:26:12.953927     867 scope.go:122] "RemoveContainer" containerID="ebb8d7a95320d7482ac95e992fbd7fe00fbdf59d2d44e45efb51c5830217a93a"
-Jun 16 14:26:12 ncn-w001 kubelet[867]: E0616 14:26:12.954212     867 pod_workers.go:1324] "Error syncing pod, skipping" err="failed to \"StartContainer\" for \"kube-flannel\" with CrashLoopBackOff: \"back-off 5m0s restarting failed container=kube-flannel pod=kube-flannel-ds-knwls_kube-flannel(1645b407-2de1-4d95-bb09-c83ef4798f0f)\"" pod="kube-flannel/kube-flannel-ds-knwls" podUID="1645b407-2de1-4d95-bb09-c83ef4798f0f"
-
+None of the nodes have errors in journalctl, /var/log/messages, /var/log/syslog, dmesg, sbps-marshal.service, target.service, or rtslib-fb-targetctl.service
 ```
 
 ##### iscsi get errors --lines \<number\>
@@ -1610,44 +1549,7 @@ iscsi get errors --lines 100
 ```
 
 ```text
-Label: ('iscsi-role=initiator', 'iscsi-role=target')
-Lines: 100
-
-Node summaries
-Node     | Findings | Log status
----------+----------+-----------
-ncn-w001 | 0        | ok
-ncn-w002 | 0        | ok
-ncn-w003 | 0        | ok
-
-Recent Service Errors
-
-Node: ncn-w001
-
-Service: sbps-marshal.service
-No recent errors found.
-
-Service: target.service
-No recent errors found.
-
-Node: ncn-w002
-
-Service: sbps-marshal.service
-No recent errors found.
-
-Service: target.service
-No recent errors found.
-
-Node: ncn-w003
-
-Service: sbps-marshal.service
-No recent errors found.
-
-Service: target.service
-No recent errors found.
-
-Detected errors
-None
+None of the nodes have errors in journalctl, /var/log/messages, /var/log/syslog, dmesg, sbps-marshal.service, target.service, or rtslib-fb-targetctl.service
 ```
 
 ##### iscsi get errors --node \<node-name\> --lines \<number\>
@@ -1657,32 +1559,7 @@ iscsi get errors --node ncn-w001 --lines 10
 ```
 
 ```text
-Node: ncn-w001
-Lines: 10
-
-Recent Service Errors
-
-sbps-marshal.service
-No recent errors found.
-
-target.service
-No recent errors found.
-
-Detected errors
-None
-
-Recent logs
-Jun 16 14:45:42 ncn-w001 sshd[18662]: Received disconnect from 192.168.122.18 port 47996:11: disconnected by user
-Jun 16 14:45:42 ncn-w001 sshd[18662]: Disconnected from user root 192.168.122.18 port 47996
-Jun 16 14:45:42 ncn-w001 sshd[18662]: pam_unix(sshd:session): session closed for user root
-Jun 16 14:45:42 ncn-w001 systemd[1]: session-291.scope: Deactivated successfully.
-Jun 16 14:45:42 ncn-w001 systemd-logind[703]: Session 291 logged out. Waiting for processes to exit.
-Jun 16 14:45:42 ncn-w001 systemd-logind[703]: Removed session 291.
-Jun 16 14:46:02 ncn-w001 sshd[18710]: Accepted publickey for root from 192.168.122.18 port 40550 ssh2: RSA SHA256:rVCopZIU9ubsCgpk64t4oM31c/K4FXqkiIxthtI2BdE
-Jun 16 14:46:02 ncn-w001 sshd[18710]: pam_unix(sshd:session): session opened for user root(uid=0) by root(uid=0)
-Jun 16 14:46:02 ncn-w001 systemd-logind[703]: New session 292 of user root.
-Jun 16 14:46:02 ncn-w001 systemd[1]: Started session-292.scope - Session 292 of User root.
-
+None of the nodes have errors in journalctl, /var/log/messages, /var/log/syslog, dmesg, sbps-marshal.service, target.service, or rtslib-fb-targetctl.service
 ```
 
 ##### iscsi get errors --out-file \<filename\>
@@ -1719,7 +1596,7 @@ iscsi get configs --node NODE_NAME [--out-file OUT_FILE]
 
 #### Description
 
-Lists the target configuration versions (from backups) available on the specified target node.
+Lists the target configuration versions (current and current-1 backups) stored locally on the master node under folders named with node names.
 
 #### Options
 
@@ -1741,29 +1618,25 @@ Node: ncn-w001
 
 Current Configuration
 ---------------------
-saveconfig.json (/etc/rtslib-fb-target/saveconfig.json)
+saveconfig.json (/etc/iscsi/configs/ncn-w001/saveconfig.json)
 
 Backup Configurations
 ---------------------
 DATE                    | FILE                                 | PATH
 ------------------------+--------------------------------------+------------------------------------------------------------------
-16 Jun 2026 01:56:56 PM | saveconfig-20260616-13:56:56-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260616-13:56:56-json.gz
-16 Jun 2026 01:06:20 PM | saveconfig-20260616-13:06:20-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260616-13:06:20-json.gz
-15 Jun 2026 03:17:31 PM | saveconfig-20260615-15:17:31-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260615-15:17:31-json.gz
-12 Jun 2026 02:10:15 PM | saveconfig-20260612-14:10:15-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260612-14:10:15-json.gz
+16 Jun 2026 01:56:56 PM | saveconfig-20260616-13:56:56-json.gz | /etc/iscsi/configs/ncn-w001/saveconfig-20260616-13:56:56-json.gz
 
 Node: ncn-w002
 
 Current Configuration
 ---------------------
-saveconfig.json (/etc/rtslib-fb-target/saveconfig.json)
+saveconfig.json (/etc/iscsi/configs/ncn-w002/saveconfig.json)
 
 Backup Configurations
 ---------------------
 DATE                    | FILE                                 | PATH
 ------------------------+--------------------------------------+------------------------------------------------------------------
-16 Jun 2026 01:57:58 PM | saveconfig-20260616-13:57:58-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260616-13:57:58-json.gz
-12 Jun 2026 02:12:31 PM | saveconfig-20260612-14:12:31-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260612-14:12:31-json.gz
+16 Jun 2026 01:57:58 PM | saveconfig-20260616-13:57:58-json.gz | /etc/iscsi/configs/ncn-w002/saveconfig-20260616-13:57:58-json.gz
 
 ```
 
@@ -1778,15 +1651,13 @@ Node: ncn-w001
 
 Current Configuration
 ---------------------
-saveconfig.json (/etc/rtslib-fb-target/saveconfig.json)
+saveconfig.json (/etc/iscsi/configs/ncn-w001/saveconfig.json)
 
 Backup Configurations
 ---------------------
 DATE                    | FILE                                 | PATH
 ------------------------+--------------------------------------+------------------------------------------------------------------
-12 Jun 2026 02:10:15 PM | saveconfig-20260612-14:10:15-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260612-14:10:15-json.gz
-15 Jun 2026 03:17:31 PM | saveconfig-20260615-15:17:31-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260615-15:17:31-json.gz
-16 Jun 2026 01:06:20 PM | saveconfig-20260616-13:06:20-json.gz | /etc/rtslib-fb-target/backup/saveconfig-20260616-13:06:20-json.gz
+16 Jun 2026 01:56:56 PM | saveconfig-20260616-13:56:56-json.gz | /etc/iscsi/configs/ncn-w001/saveconfig-20260616-13:56:56-json.gz
 ```
 
 ##### iscsi get configs --node \<target-node\> --out-file \<filename\>
@@ -1808,19 +1679,18 @@ Output saved to iscsi-output.txt
 #### Syntax
 
 ```bash
-iscsi set label [--target TARGET] [--initiator INITIATOR]
+iscsi set label --target TARGET
 ```
 
 #### Description
 
-Configures the Kubernetes label selectors stored in the local config file (`/etc/iscsi/config.yml`) used by the discovery mechanisms.
+Configures the Kubernetes label selector stored in the local config file (`/etc/iscsi/config.yml`) used by the discovery mechanisms.
 
 #### Options
 
-| Flag          | Type   | Description                                    | Default                                     |
-| :------------ | :----- | :--------------------------------------------- | :------------------------------------------ |
-| `--target`    | String | Label selector for identifying target nodes    | `None` (does not modify target selector)    |
-| `--initiator` | String | Label selector for identifying initiator nodes | `None` (does not modify initiator selector) |
+| Flag       | Type   | Description                                 | Default                                  |
+| :--------- | :----- | :------------------------------------------ | :--------------------------------------- |
+| `--target` | String | Label selector for identifying target nodes | `None` (does not modify target selector) |
 
 #### Command Combinations
 
@@ -1828,26 +1698,6 @@ Configures the Kubernetes label selectors stored in the local config file (`/etc
 
 ```bash
 iscsi set label --target iscsi-role=target
-```
-
-```text
-Config saved at /etc/iscsi/config.yml
-```
-
-##### iscsi set label --initiator \<selector\>
-
-```bash
-iscsi set label --initiator iscsi-role=initiator
-```
-
-```text
-Config saved at /etc/iscsi/config.yml
-```
-
-##### iscsi set label --target \<selector\> --initiator \<selector\>
-
-```bash
-iscsi set label --target iscsi-role=target --initiator iscsi-role=initiator
 ```
 
 ```text

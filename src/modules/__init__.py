@@ -1,8 +1,6 @@
 from .kubernetes import (
     get_target_node_label,
     set_target_node_label,
-    get_initiator_node_label,
-    set_initator_node_label,
 )
 from .commands import (
     cmd_get_nodes,

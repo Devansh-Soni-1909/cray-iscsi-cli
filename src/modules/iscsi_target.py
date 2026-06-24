@@ -58,21 +58,20 @@ def list_config_versions(
     node: str,
 ) -> Tuple[str | None, List[Tuple[str, str]]]:
     last_error = None
-    current_config = None
+    remote_current = None
 
-    # Find current config
     for config_path in SAVECONFIG_PATHS:
         cmd = f'pdsh -w {node} "sudo test -f {config_path} && sudo echo {config_path}"'
         try:
             output = run_pdsh_lines(cmd)
             if output:
-                current_config = output[0].strip()
+                remote_current = output[0].strip()
                 break
         except Exception as e:
             last_error = str(e)
             continue
 
-    # Find backup configs
+    remote_backups = []
     for backup_path in BACKUP_PATHS:
         cmd = (
             f"pdsh -w {node} "
@@ -80,38 +79,113 @@ def list_config_versions(
         )
         try:
             output = run_pdsh_lines(cmd)
-            if not output:
-                last_error = f"Empty directory or No directory found at {backup_path}"
-                continue
-
-            versions: List[Tuple[str, str]] = []
-            for filepath in output:
-                filename = Path(filepath).name
-                match = re.search(
-                    r"saveconfig-(\d{8})-(\d{2}:\d{2}:\d{2})",
-                    filename,
-                )
-                if match:
-                    dt = datetime.strptime(
-                        f"{match.group(1)} {match.group(2)}",
-                        "%Y%m%d %H:%M:%S",
-                    )
-                    timestamp = dt.strftime("%d %b %Y %I:%M:%S %p")
-                else:
-                    timestamp = "Unknown"
-                versions.append((filepath, timestamp))
-            versions.reverse()
-            return current_config, versions
+            if output:
+                remote_backups = output
+                break
         except Exception as e:
             last_error = str(e)
             continue
 
-    raise TargetConfigurationError(
-        node, f"Failed to list configuration versions: {last_error}"
-    )
+    versions: List[Tuple[str, str]] = []
+    for filepath in remote_backups:
+        filename = Path(filepath).name
+        match = re.search(
+            r"saveconfig-(\d{8})-(\d{2}:\d{2}:\d{2})",
+            filename,
+        )
+        if match:
+            dt = datetime.strptime(
+                f"{match.group(1)} {match.group(2)}",
+                "%Y%m%d %H:%M:%S",
+            )
+            timestamp = dt.strftime("%d %b %Y %I:%M:%S %p")
+        else:
+            timestamp = "Unknown"
+        versions.append((filepath, timestamp))
+    versions.reverse()
+
+    remote_backup_path = versions[0][0] if versions else None
+    backup_timestamp = versions[0][1] if versions else None
+
+    local_dir = Path("/etc/iscsi/configs") / node
+    try:
+        local_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        raise TargetConfigurationError(
+            node, f"Failed to create local configuration directory {local_dir}: {e}"
+        )
+
+    local_current_path = None
+    local_backup_path = None
+    keep_files = set()
+
+    if remote_current:
+        cmd = f'pdsh -w {node} "sudo cat {remote_current}"'
+        try:
+            content = run_pdsh_text(cmd)
+            local_current = local_dir / "saveconfig.json"
+            with open(local_current, "w", encoding="utf-8") as f:
+                f.write(content)
+            local_current_path = str(local_current)
+            keep_files.add(local_current.name)
+        except Exception as e:
+            last_error = f"Failed to fetch current config from {remote_current}: {e}"
+
+    if remote_backup_path:
+        remote_reader = (
+            f"sudo gzip -dc {remote_backup_path}"
+            if remote_backup_path.endswith(".gz")
+            else f"sudo cat {remote_backup_path}"
+        )
+        cmd = f'pdsh -w {node} "{remote_reader}"'
+        try:
+            content = run_pdsh_text(cmd)
+            filename = Path(remote_backup_path).name
+            local_backup = local_dir / filename
+            if filename.endswith(".gz"):
+                import gzip
+                with gzip.open(local_backup, "wt", encoding="utf-8") as f:
+                    f.write(content)
+            else:
+                with open(local_backup, "w", encoding="utf-8") as f:
+                    f.write(content)
+            local_backup_path = str(local_backup)
+            keep_files.add(filename)
+        except Exception as e:
+            last_error = f"Failed to fetch backup config from {remote_backup_path}: {e}"
+
+    try:
+        for item in local_dir.iterdir():
+            if item.is_file() and item.name not in keep_files:
+                item.unlink()
+    except Exception as e:
+        pass
+
+    if not local_current_path and not local_backup_path:
+        raise TargetConfigurationError(
+            node, f"Failed to list configuration versions: {last_error or 'no config found'}"
+        )
+
+    res_versions = []
+    if local_backup_path and backup_timestamp:
+        res_versions.append((local_backup_path, backup_timestamp))
+
+    return local_current_path, res_versions
 
 
 def read_backup_config_file(node: str, path: str) -> dict:
+    if path.startswith("/etc/iscsi/configs/"):
+        try:
+            if path.endswith(".gz"):
+                import gzip
+                with gzip.open(path, "rt", encoding="utf-8") as f:
+                    return json.loads(f.read())
+            else:
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.loads(f.read())
+        except Exception as e:
+            raise TargetConfigurationError(node, f"Failed to parse local JSON from {path}: {e}")
+
     remote_reader = (
         f"sudo gzip -dc {path}" if path.endswith(".gz") else f"sudo cat {path}"
     )

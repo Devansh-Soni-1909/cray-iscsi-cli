@@ -4,7 +4,6 @@ import argparse
 
 from modules import (
     get_target_node_label,
-    get_initiator_node_label,
     cmd_get_nodes,
     cmd_get_configs,
     cmd_get_tpgts,
@@ -21,7 +20,6 @@ from modules import (
 )
 
 DEFAULT_TARGET_SELECTOR = None
-DEFAULT_INITIATOR_SELECTOR = None
 DEFAULT_OUT_FILE = "iscsi-output.txt"
 
 
@@ -186,7 +184,7 @@ def build_parser() -> argparse.ArgumentParser:
     errors_parser.set_defaults(func=cmd_get_errors)
 
     set_parser = subparsers.add_parser(
-        "set", help="Set label for target/initiator nodes"
+        "set", help="Set label for target nodes"
     )
     set_subparsers = set_parser.add_subparsers(dest="set_command", required=True)
 
@@ -199,11 +197,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--target",
         default=DEFAULT_TARGET_SELECTOR,
         help="Label selector used to identify target nodes",
-    )
-    label_parser.add_argument(
-        "--initiator",
-        default=DEFAULT_INITIATOR_SELECTOR,
-        help="Label selector used to identify initiator nodes",
     )
     label_parser.set_defaults(func=cmd_set_label)
 
@@ -244,9 +237,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     try:
-        global DEFAULT_TARGET_SELECTOR, DEFAULT_INITIATOR_SELECTOR
+        global DEFAULT_TARGET_SELECTOR
         DEFAULT_TARGET_SELECTOR = get_target_node_label()
-        DEFAULT_INITIATOR_SELECTOR = get_initiator_node_label()
 
         parser = build_parser()
         args = parser.parse_args(argv)

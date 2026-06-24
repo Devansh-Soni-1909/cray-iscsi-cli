@@ -7,11 +7,9 @@ from .schemas import KubernetesError
 from .utils import run_command
 
 DEFAULT_TARGET_SELECTOR_VALUE = "iscsi-role=target"
-DEFAULT_INITIATOR_SELECTOR_VALUE = "iscsi-role=initiator"
 
 CLI_CONFIG_PATH = Path("/etc/iscsi/config.yml")
 TARGET_SELECTOR_KEY = "target-selector"
-INITIATOR_SELECTOR_KEY = "initiator-selector"
 
 
 def _load_config() -> dict:
@@ -54,12 +52,14 @@ def set_target_node_label(label: str) -> str:
     return _set_config_value(TARGET_SELECTOR_KEY, label)
 
 
-def get_initiator_node_label() -> str:
-    return _get_config_value(INITIATOR_SELECTOR_KEY, DEFAULT_INITIATOR_SELECTOR_VALUE)
-
-
-def set_initator_node_label(label: str) -> str:
-    return _set_config_value(INITIATOR_SELECTOR_KEY, label)
+def _matches_selector(labels: dict, selector: str) -> bool:
+    if not selector:
+        return False
+    if "=" in selector:
+        key, val = selector.split("=", 1)
+        return labels.get(key.strip()) == val.strip()
+    else:
+        return selector.strip() in labels
 
 
 def run_kubectl_json(command: str) -> dict:
@@ -79,10 +79,10 @@ def run_kubectl_json(command: str) -> dict:
 
 # revisit: use sat status --filter role=compute
 def get_kubernetes_nodes(
-    node_selector: str, full_info: bool = False
+    node_selector: str, full_info: bool = False, initiator: bool = False
 ) -> List[str] | Dict[str, Dict]:
-    if full_info:
-        command = f"kubectl get nodes -l {node_selector}  -o json"
+    if initiator:
+        command = "kubectl get nodes -o json"
         result = run_command(command)
         if result.returncode != 0:
             message = (
@@ -91,61 +91,122 @@ def get_kubernetes_nodes(
                 or f"exit {result.returncode}"
             )
             raise KubernetesError(
-                f"Failed to retrieve nodes with selector '{node_selector}': {message}"
+                f"Failed to retrieve all nodes for initiator check: {message}"
             )
         try:
             data = json.loads(result.stdout)
-            nodes_data = {}
-            for item in data.get("items", []):
-                metadata = item.get("metadata", {})
-                status = item.get("status", {})
-                node_info = status.get("nodeInfo", {})
-                ready_condition = next(
-                    (
-                        condition
-                        for condition in status.get("conditions", [])
-                        if condition.get("type") == "Ready"
-                    ),
-                    None,
-                )
-                uid = metadata.get("uid")
-                nodes_data[uid] = {
-                    "name": metadata.get("name"),
-                    "addresses": status.get("addresses", []),
-                    "node_info": {
-                        "arch": node_info.get("architecture"),
-                        "os": node_info.get("operatingSystem"),
-                        "os_image": node_info.get("osImage"),
-                    },
-                    "status": (
-                        "Ready"
-                        if ready_condition and ready_condition.get("status") == "True"
-                        else "NotReady"
-                    ),
-                }
-            return nodes_data
+            if full_info:
+                nodes_data = {}
+                for item in data.get("items", []):
+                    metadata = item.get("metadata", {})
+                    labels = metadata.get("labels", {}) or {}
+                    if _matches_selector(labels, node_selector):
+                        continue
+                    status = item.get("status", {})
+                    node_info = status.get("nodeInfo", {})
+                    ready_condition = next(
+                        (
+                            condition
+                            for condition in status.get("conditions", [])
+                            if condition.get("type") == "Ready"
+                        ),
+                        None,
+                    )
+                    uid = metadata.get("uid")
+                    nodes_data[uid] = {
+                        "name": metadata.get("name"),
+                        "addresses": status.get("addresses", []),
+                        "node_info": {
+                            "arch": node_info.get("architecture"),
+                            "os": node_info.get("operatingSystem"),
+                            "os_image": node_info.get("osImage"),
+                        },
+                        "status": (
+                            "Ready"
+                            if ready_condition and ready_condition.get("status") == "True"
+                            else "NotReady"
+                        ),
+                    }
+                return nodes_data
+            else:
+                names = []
+                for item in data.get("items", []):
+                    metadata = item.get("metadata", {})
+                    labels = metadata.get("labels", {}) or {}
+                    if _matches_selector(labels, node_selector):
+                        continue
+                    names.append(metadata.get("name"))
+                return [name for name in names if name]
         except json.JSONDecodeError as exc:
             raise KubernetesError(
-                f"Failed to parse JSON for nodes with selector '{node_selector}': {exc}"
+                f"Failed to parse JSON for all nodes: {exc}"
             )
     else:
-        command = (
-            "kubectl get nodes "
-            f"-l {node_selector} "
-            "-o jsonpath='{.items[*].metadata.name}'"
-        )
-        result = run_command(command)
-        if result.returncode != 0:
-            message = (
-                result.stderr.strip()
-                or result.stdout.strip()
-                or f"exit {result.returncode}"
+        if full_info:
+            command = f"kubectl get nodes -l {node_selector}  -o json"
+            result = run_command(command)
+            if result.returncode != 0:
+                message = (
+                    result.stderr.strip()
+                    or result.stdout.strip()
+                    or f"exit {result.returncode}"
+                )
+                raise KubernetesError(
+                    f"Failed to retrieve nodes with selector '{node_selector}': {message}"
+                )
+            try:
+                data = json.loads(result.stdout)
+                nodes_data = {}
+                for item in data.get("items", []):
+                    metadata = item.get("metadata", {})
+                    status = item.get("status", {})
+                    node_info = status.get("nodeInfo", {})
+                    ready_condition = next(
+                        (
+                            condition
+                            for condition in status.get("conditions", [])
+                            if condition.get("type") == "Ready"
+                        ),
+                        None,
+                    )
+                    uid = metadata.get("uid")
+                    nodes_data[uid] = {
+                        "name": metadata.get("name"),
+                        "addresses": status.get("addresses", []),
+                        "node_info": {
+                            "arch": node_info.get("architecture"),
+                            "os": node_info.get("operatingSystem"),
+                            "os_image": node_info.get("osImage"),
+                        },
+                        "status": (
+                            "Ready"
+                            if ready_condition and ready_condition.get("status") == "True"
+                            else "NotReady"
+                        ),
+                    }
+                return nodes_data
+            except json.JSONDecodeError as exc:
+                raise KubernetesError(
+                    f"Failed to parse JSON for nodes with selector '{node_selector}': {exc}"
+                )
+        else:
+            command = (
+                "kubectl get nodes "
+                f"-l {node_selector} "
+                "-o jsonpath='{.items[*].metadata.name}'"
             )
-            raise KubernetesError(
-                f"Failed to list nodes with selector '{node_selector}': {message}"
-            )
-        output = result.stdout.replace("'", "").strip()
-        return [node for node in output.split() if node]
+            result = run_command(command)
+            if result.returncode != 0:
+                message = (
+                    result.stderr.strip()
+                    or result.stdout.strip()
+                    or f"exit {result.returncode}"
+                )
+                raise KubernetesError(
+                    f"Failed to list nodes with selector '{node_selector}': {message}"
+                )
+            output = result.stdout.replace("'", "").strip()
+            return [node for node in output.split() if node]
 
 
 def get_kubernetes_node_json(node_name: str) -> dict:
@@ -161,11 +222,8 @@ def get_node_labels(node_name: str) -> Dict[str, str]:
 
 
 def detect_node_role(labels: Dict[str, str]) -> str:
-    target_value = str(labels.get("iscsi-target", "")).lower()
-    role_value = str(labels.get("iscsi-role", "")).lower()
-    initiator_value = str(labels.get("iscsi-initiator", "")).lower()
-    if target_value in {"true", "yes", "1", "enabled"}:
+    target_selector = get_target_node_label()
+    if _matches_selector(labels, target_selector):
         return "target"
-    if role_value == "initiator" or initiator_value in {"true", "yes", "1", "enabled"}:
+    else:
         return "initiator"
-    return "unknown"

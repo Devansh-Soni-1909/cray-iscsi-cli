@@ -442,13 +442,12 @@ def format_target_metrics(summaries: list[dict]) -> str:
         lines.append("Image Summary")
         lines.append(
             render_table(
-                ["Total Images", "RootFS", "PE", "Unknown"],
+                ["Total Images", "RootFS", "PE"],
                 [
                     [
                         str(summary.get("total_active_images", 0)),
                         str(summary.get("rootfs_count", 0)),
                         str(summary.get("pe_count", 0)),
-                        str(summary.get("unknown_count", 0)),
                     ]
                 ],
             )
@@ -581,6 +580,29 @@ def format_target_metrics(summaries: list[dict]) -> str:
 
 
 def format_error_summary(payload: dict) -> str:
+    has_errors = False
+    if "nodes" in payload:
+        for item in payload.get("nodes", []):
+            if item.get("diagnostics"):
+                has_errors = True
+                break
+            for service, output in item.get("service_errors", {}).items():
+                if output and output.strip():
+                    has_errors = True
+                    break
+            if has_errors:
+                break
+    else:
+        if payload.get("diagnostics"):
+            has_errors = True
+        for service, output in payload.get("service_errors", {}).items():
+            if output and output.strip():
+                has_errors = True
+                break
+
+    if not has_errors:
+        return "None of the nodes have errors in journalctl, /var/log/messages, /var/log/syslog, dmesg, sbps-marshal.service, target.service, or rtslib-fb-targetctl.service"
+
     if "nodes" in payload:
         lines = [
             f"Label: {payload.get('label', '-')}",
