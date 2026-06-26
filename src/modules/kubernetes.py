@@ -61,6 +61,17 @@ def _matches_selector(labels: dict, selector: str) -> bool:
     else:
         return selector.strip() in labels
 
+_CONTROL_PLANE_LABELS = (
+    "node-role.kubernetes.io/control-plane",
+    "node-role.kubernetes.io/master",
+)
+def _is_control_plane_node(item: dict) -> bool:
+    labels = item.get("metadata", {}).get("labels", {}) or {}
+    if any(lbl in labels for lbl in _CONTROL_PLANE_LABELS):
+        return True
+    taints = item.get("spec", {}).get("taints", []) or []
+    return any(t.get("key") in _CONTROL_PLANE_LABELS for t in taints)
+
 
 def run_kubectl_json(command: str) -> dict:
     result = run_command(command)
@@ -98,6 +109,8 @@ def get_kubernetes_nodes(
             if full_info:
                 nodes_data = {}
                 for item in data.get("items", []):
+                    if _is_control_plane_node(item):
+                        continue
                     metadata = item.get("metadata", {})
                     labels = metadata.get("labels", {}) or {}
                     if _matches_selector(labels, node_selector):
@@ -131,6 +144,8 @@ def get_kubernetes_nodes(
             else:
                 names = []
                 for item in data.get("items", []):
+                    if _is_control_plane_node(item):
+                        continue
                     metadata = item.get("metadata", {})
                     labels = metadata.get("labels", {}) or {}
                     if _matches_selector(labels, node_selector):

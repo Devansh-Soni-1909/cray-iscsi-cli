@@ -1003,7 +1003,7 @@ Output saved to iscsi-output.txt
 #### Syntax
 
 ```bash
-iscsi get metrics --node NODE_NAME [--config-file CONFIG_FILE] [--out-file OUT_FILE]
+iscsi get metrics --node NODE_NAME  [--out-file OUT_FILE]
 ```
 
 #### Description
@@ -1012,11 +1012,10 @@ Retrieves read metrics (Read MBytes, Read IOPS) per LUN on target nodes, or sess
 
 #### Options
 
-| Flag            | Type   | Description                                          | Default                                    |
-| :-------------- | :----- | :--------------------------------------------------- | :----------------------------------------- |
-| `--node`        | String | Target/Initiator node name to inspect                | **Required**                               |
-| `--config-file` | String | Backup configuration file to compare metrics against | `None` (uses current active target config) |
-| `--out-file`    | String | Save output to specified file path                   | `iscsi-output.txt`                         |
+| Flag         | Type   | Description                           | Default            |
+| :----------- | :----- | :------------------------------------ | :----------------- |
+| `--node`     | String | Target/Initiator node name to inspect | **Required**       |
+| `--out-file` | String | Save output to specified file path    | `iscsi-output.txt` |
 
 #### Command Combinations
 
@@ -1189,86 +1188,10 @@ Total Deleted | Deleted rootfs Images | Deleted pe Images
 
 ```
 
-##### iscsi get metrics --node \<node-name\> --config-file \<path\>
-
-```bash
-iscsi get metrics --node ncn-w001 --config-file /etc/target/saveconfig.json
-```
-
-```text
-Node: ncn-w001
-Role: target
-
-TPGTs: 1, LUNs: 10
-
-Image Summary
-Total Images | RootFS | PE
--------------+--------+----
-10           | 2      | 8
-
-LUN read metrics
-IQN: iqn.2026-04.lab.local:lab.ncn-w001
-TPGT: tpgt_1
-LUN  | Mapped Image                                 | Read MBytes | Read IOPs
------+----------------------------------------------+-------------+----------
-lun0 | /var/lib/cps-local/boot-images/image1_rootfs | 0           | 164
-lun1 | /var/lib/cps-local/boot-images/image2_rootfs | 1           | 232
-lun2 | /var/lib/cps-local/boot-images/image1_pe     | 1           | 232
-lun3 | /var/lib/cps-local/boot-images/image2_pe     | 1           | 232
-lun4 | /var/lib/cps-local/boot-images/image3_pe     | 1           | 232
-lun5 | /var/lib/cps-local/boot-images/image4_pe     | 1           | 232
-lun6 | /var/lib/cps-local/boot-images/image5_pe     | 1           | 232
-lun7 | /var/lib/cps-local/boot-images/image6_pe     | 1           | 232
-lun8 | /var/lib/cps-local/boot-images/image7_pe     | 1           | 232
-lun9 | /var/lib/cps-local/boot-images/image8_pe     | 1           | 232
-
-Image read metrics
-Image Name    | Type   | Image Path                                   | Read MBytes | Read IOPs
---------------+--------+----------------------------------------------+-------------+----------
-image1_rootfs | rootfs | /var/lib/cps-local/boot-images/image1_rootfs | 0           | 164
-image2_rootfs | rootfs | /var/lib/cps-local/boot-images/image2_rootfs | 1           | 232
-image1_pe     | pe     | /var/lib/cps-local/boot-images/image1_pe     | 1           | 232
-image2_pe     | pe     | /var/lib/cps-local/boot-images/image2_pe     | 1           | 232
-image3_pe     | pe     | /var/lib/cps-local/boot-images/image3_pe     | 1           | 232
-image4_pe     | pe     | /var/lib/cps-local/boot-images/image4_pe     | 1           | 232
-image5_pe     | pe     | /var/lib/cps-local/boot-images/image5_pe     | 1           | 232
-image6_pe     | pe     | /var/lib/cps-local/boot-images/image6_pe     | 1           | 232
-image7_pe     | pe     | /var/lib/cps-local/boot-images/image7_pe     | 1           | 232
-image8_pe     | pe     | /var/lib/cps-local/boot-images/image8_pe     | 1           | 232
-
-Removed images (wrt previous configuration)
-Type   | Image         | Path
--------+---------------+---------------------------------------------
-rootfs | image1_rootfs | /var/lib/cps-local/boot_images/image1_rootfs
-rootfs | image2_rootfs | /var/lib/cps-local/boot_images/image2_rootfs
-pe     | image1_pe     | /var/lib/cps-local/boot_images/image1_pe.img
-pe     | image2_pe     | /var/lib/cps-local/boot_images/image2_pe.img
-pe     | image3_pe     | /var/lib/cps-local/boot_images/image3_pe.img
-pe     | image4_pe     | /var/lib/cps-local/boot_images/image4_pe.img
-pe     | image5_pe     | /var/lib/cps-local/boot_images/image5_pe.img
-pe     | image6_pe     | /var/lib/cps-local/boot_images/image6_pe.img
-pe     | image7_pe     | /var/lib/cps-local/boot_images/image7_pe.img
-pe     | image8_pe     | /var/lib/cps-local/boot_images/image8_pe.img
-
-Total Deleted | Deleted rootfs Images | Deleted pe Images
---------------+-----------------------+------------------
-10            | 2                     | 8
-```
-
 ##### iscsi get metrics --node \<node-name\> --out-file \<filename\>
 
 ```bash
 iscsi get metrics --node ncn-w001 --out-file iscsi-output.txt
-```
-
-```text
-Output saved to iscsi-output.txt
-```
-
-##### iscsi get metrics --node \<node-name\> --config-file \<path\> --out-file \<filename\>
-
-```bash
-iscsi get metrics --node ncn-w001 --config-file /etc/target/saveconfig.json --out-file iscsi-output.txt
 ```
 
 ```text

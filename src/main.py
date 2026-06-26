@@ -119,12 +119,6 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Target node name; if omitted, all target nodes are queried",
     )
-    metrics_parser.add_argument(
-        "--config-file",
-        default=None,
-        help="Backup config file path to compare against; defaults to the latest backup version",
-    )
-
     metrics_parser.set_defaults(func=cmd_get_metrics)
 
     # cmd: get sessions
@@ -183,9 +177,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     errors_parser.set_defaults(func=cmd_get_errors)
 
-    set_parser = subparsers.add_parser(
-        "set", help="Set label for target nodes"
-    )
+    set_parser = subparsers.add_parser("set", help="Set label for target nodes")
     set_subparsers = set_parser.add_subparsers(dest="set_command", required=True)
 
     # cmd: set label

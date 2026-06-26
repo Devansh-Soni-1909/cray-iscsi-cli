@@ -61,8 +61,6 @@ except Exception:
     DEFAULT_TARGET_SELECTOR = "iscsi-role=target"
 
 
-
-
 # get commands
 
 
@@ -70,7 +68,9 @@ def cmd_get_nodes(args) -> None:
     label = None
     if args.initiator:
         label = f"not {DEFAULT_TARGET_SELECTOR}"
-        nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR, full_info=True, initiator=True)
+        nodes = get_kubernetes_nodes(
+            DEFAULT_TARGET_SELECTOR, full_info=True, initiator=True
+        )
         for node in nodes.keys():
             nodes[node]["role"] = "initiator"
     else:
@@ -194,9 +194,7 @@ def cmd_get_metrics(args) -> None:
         labels = get_node_labels(node_name)
         role = detect_node_role(labels)
         if role == "target":
-            summary = build_target_node_summary(
-                node_name, with_metrics=True, compare_config=args.config_file
-            )
+            summary = build_target_node_summary(node_name, with_metrics=True)
             emit_output(
                 [summary], formatter=format_target_metrics, out_file=args.out_file
             )
