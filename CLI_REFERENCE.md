@@ -21,8 +21,7 @@ iscsi
 ├── set
 │   └── label
 └── describe
-    ├── node
-    └── config
+    └── node
 ```
 
 ---
