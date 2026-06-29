@@ -105,7 +105,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Limit output to PE or rootfs images",
     )
     images_parser.add_argument(
-        "--metrics", action="store_true", default=False, help="Include LUN metrics"
+        "--metrics", action="store_true", default=False, help="Include Image metrics"
     )
 
     images_parser.set_defaults(func=cmd_get_images)

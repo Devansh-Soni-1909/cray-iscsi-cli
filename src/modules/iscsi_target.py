@@ -144,6 +144,7 @@ def list_config_versions(
             local_backup = local_dir / filename
             if filename.endswith(".gz"):
                 import gzip
+
                 with gzip.open(local_backup, "wt", encoding="utf-8") as f:
                     f.write(content)
             else:
@@ -163,7 +164,8 @@ def list_config_versions(
 
     if not local_current_path and not local_backup_path:
         raise TargetConfigurationError(
-            node, f"Failed to list configuration versions: {last_error or 'no config found'}"
+            node,
+            f"Failed to list configuration versions: {last_error or 'no config found'}",
         )
 
     res_versions = []
@@ -178,13 +180,16 @@ def read_backup_config_file(node: str, path: str) -> dict:
         try:
             if path.endswith(".gz"):
                 import gzip
+
                 with gzip.open(path, "rt", encoding="utf-8") as f:
                     return json.loads(f.read())
             else:
                 with open(path, "r", encoding="utf-8") as f:
                     return json.loads(f.read())
         except Exception as e:
-            raise TargetConfigurationError(node, f"Failed to parse local JSON from {path}: {e}")
+            raise TargetConfigurationError(
+                node, f"Failed to parse local JSON from {path}: {e}"
+            )
 
     remote_reader = (
         f"sudo gzip -dc {path}" if path.endswith(".gz") else f"sudo cat {path}"
@@ -319,15 +324,20 @@ def get_image_udev_path(node: str, plugin: str, name: str) -> Tuple[str, Optiona
         return None, str(exc)
 
 
-def get_image_fileio_idx(node: str, name: str) -> Tuple[int, Optional[str]]:
+def get_image_sysfs_path(node: str, name: str) -> Tuple[str, Optional[str]]:
+    remote_script = (
+        f"find /sys/kernel/config/target/core -maxdepth 2 "
+        f"-type d -name {shlex.quote(name)} | head -n1"
+    )
+    command = f"pdsh -w {node} " f"{shlex.quote(f'sh -c {shlex.quote(remote_script)}')}"
+
     try:
-        data = get_saveconfig(node)
-        for idx, obj in enumerate(data.get("storage_objects", [])):
-            if obj.get("name") == name:
-                return idx, None
-        return -1, f"No storage object with name '{name}' found in saveconfig"
-    except TargetConfigurationError as exc:
-        return -1, str(exc)
+        path = run_pdsh_text(command).strip()
+        if not path:
+            return "", f"Storage object '{name}' not found in sysfs"
+        return path, None
+    except Exception as exc:
+        return "", str(exc)
 
 
 def infer_image_type(identity: str) -> str:
@@ -436,14 +446,8 @@ def read_lun_stats(
     }
 
 
-def read_image_stats(
-    node: str,
-    fileio_idx: int,
-    image_name: str,
-) -> Dict[str, int]:
-    stats_path = (
-        f"{IMAGE_METRICS_BASE_PATH}/fileio_{fileio_idx}/{image_name}/statistics/scsi_lu"
-    )
+def read_image_stats(node: str, sysfs_path: str) -> Dict[str, int]:
+    stats_path = f"{sysfs_path}/statistics/scsi_lu"
 
     remote_script = (
         f"mbytes=$(cat {stats_path}/read_mbytes 2>/dev/null); "
@@ -692,13 +696,13 @@ def collect_target_images(
         if image_results and with_metrics:
 
             def fetch_image_stats(image: Image) -> Tuple[Image, dict]:
-                fileio_idx, idx_error = get_image_fileio_idx(node, image.image_name)
-                if idx_error or fileio_idx < 0:
+                sysfs_path, path_error = get_image_sysfs_path(node, image.image_name)
+                if path_error:
                     raise MetricsCollectionError(
                         node,
-                        f"Cannot determine fileio index for '{image.image_name}': {idx_error}",
+                        f"Cannot determine sysfs path for image '{image.image_name}': {path_error}",
                     )
-                data = read_image_stats(node, fileio_idx, image.image_name)
+                data = read_image_stats(node, sysfs_path)
                 return image, data
 
             with ThreadPoolExecutor(max_workers=10) as executor:
