@@ -324,15 +324,6 @@ def cmd_get_errors(args) -> None:
     emit_output(payload, formatter=format_error_summary, out_file=args.out_file)
 
 
-# set commands
-def cmd_set_label(args) -> None:
-    if args.target:
-        set_target_node_label(args.target)
-    else:
-        raise CLIParameterError("Provide target label")
-    print(f"Config saved at {CLI_CONFIG_PATH}")
-
-
 # describe commands
 def cmd_describe_node(args) -> None:
     if args.node:
@@ -375,6 +366,16 @@ def cmd_describe_node(args) -> None:
 
 
 # NOT USED
+# set label command
+def cmd_set_label(args) -> None:
+    if args.target:
+        set_target_node_label(args.target)
+    else:
+        raise CLIParameterError("Provide target label")
+    print(f"Config saved at {CLI_CONFIG_PATH}")
+
+
+# describe config cmd
 def cmd_describe_config(args) -> None:
     if args.node:
         if args.file_path:

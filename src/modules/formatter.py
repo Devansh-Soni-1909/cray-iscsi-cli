@@ -295,13 +295,9 @@ def format_tpgts_output(payload: dict) -> str:
                         tpgt["iqn"],
                         tpgt["tpgt_name"],
                         str(tpgt["lun_count"]),
-                        str(tpgt["acl_count"]),
-                        ", ".join(tpgt["acl_names"]) or "None",
                     ]
                 )
-            lines.append(
-                render_table(["IQN", "TPGT", "LUNs", "ACLs", "ACL names"], rows)
-            )
+            lines.append(render_table(["IQN", "TPGT", "LUNs"], rows))
         else:
             lines.append("None")
     else:
@@ -398,6 +394,8 @@ def _format_initiator_mount_status_summary(summary: dict) -> str:
     lines = [
         f"Node: {summary.get('node', 'unknown')}",
         f"Role: {summary.get('role', 'initiator')}",
+        f"Mounted: {summary.get('mounted',0)}",
+        f"Unmounted: {summary.get('unmounted',0)}", 
         "",
         _format_mount_status_table(summary.get("mounts", [])),
     ]
@@ -414,7 +412,8 @@ def format_mount_status_output(payload: dict) -> str:
         total_mounted = sum(summary.get("mounted", 0) for summary in nodes)
         total_unmounted = sum(summary.get("unmounted", 0) for summary in nodes)
         lines = [
-            f"Mounted: {total_mounted}, Unmounted: {total_unmounted}",
+            f"Total Mounted: {total_mounted}", 
+            f"Total Unmounted: {total_unmounted}",
             "",
         ]
         for summary in nodes:
@@ -747,36 +746,39 @@ def format_configs_output(payloads: list[dict]) -> str:
         current_config = payload.get("current_config")
         versions = payload.get("versions", [])
 
-        lines = [
-            f"Node: {node}",
-            "",
-            "Current Configuration",
-            "---------------------",
-        ]
+        headers = ["TYPE", "DATE", "FILE", "LOCAL PATH"]
+        rows = []
 
         if current_config:
             current_path = Path(current_config)
-            lines.append(f"{current_path.name} ({current_path})")
-        else:
-            lines.append("None")
+            rows.append(
+                [
+                    "Current",
+                    "-",
+                    current_path.name,
+                    str(current_path),
+                ]
+            )
 
-        lines.extend(
-            [
-                "",
-                "Backup Configurations",
-                "---------------------",
-            ]
+        for filepath, date in versions:
+            path = Path(filepath)
+            rows.append(
+                [
+                    "Backup",
+                    date,
+                    path.name,
+                    filepath,
+                ]
+            )
+
+        sections.append(
+            "\n".join(
+                [
+                    f"Node: {node}",
+                    "",
+                    render_table(headers, rows) if rows else "No configurations found",
+                ]
+            )
         )
-
-        if versions:
-            headers = ["DATE", "FILE", "PATH"]
-            rows = [
-                [date, Path(filepath).name, filepath] for filepath, date in versions
-            ]
-            lines.append(render_table(headers, rows))
-        else:
-            lines.append("None")
-
-        sections.append("\n".join(lines))
 
     return separator.join(sections)

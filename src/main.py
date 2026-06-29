@@ -54,6 +54,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     nodes_parser.set_defaults(func=cmd_get_nodes)
 
+    # cmd: get tpgts
+    tpgts_parser = get_subparsers.add_parser(
+        "tpgts",
+        parents=[out_file_parent],
+        help="List TPGTs for one or more target nodes",
+    )
+    tpgts_parser.add_argument(
+        "--node",
+        default=None,
+        help="Target node name; if omitted, all target nodes are queried",
+    )
+
+    tpgts_parser.set_defaults(func=cmd_get_tpgts)
+
     # cmd: get luns
     luns_parser = get_subparsers.add_parser(
         "luns", parents=[out_file_parent], help="List LUNs for one or more target nodes"
@@ -74,20 +88,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     luns_parser.set_defaults(func=cmd_get_luns)
-
-    # cmd: get tpgts
-    tpgts_parser = get_subparsers.add_parser(
-        "tpgts",
-        parents=[out_file_parent],
-        help="List TPGTs for one or more target nodes",
-    )
-    tpgts_parser.add_argument(
-        "--node",
-        default=None,
-        help="Target node name; if omitted, all target nodes are queried",
-    )
-
-    tpgts_parser.set_defaults(func=cmd_get_tpgts)
 
     # cmd: get images
     images_parser = get_subparsers.add_parser(
@@ -148,7 +148,7 @@ def build_parser() -> argparse.ArgumentParser:
     configs_parser = get_subparsers.add_parser(
         "configs",
         parents=[out_file_parent],
-        help="List all the target node configuration versions",
+        help="Retrieve the current and previous target node configurations and store them locally",
     )
     configs_parser.add_argument(
         "--node",
@@ -177,20 +177,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     errors_parser.set_defaults(func=cmd_get_errors)
 
-    set_parser = subparsers.add_parser("set", help="Set label for target nodes")
-    set_subparsers = set_parser.add_subparsers(dest="set_command", required=True)
-
     # cmd: set label
-    label_parser = set_subparsers.add_parser(
-        "label",
-        help="Configure label selectors used to filter target and initiator nodes",
-    )
-    label_parser.add_argument(
-        "--target",
-        default=DEFAULT_TARGET_SELECTOR,
-        help="Label selector used to identify target nodes",
-    )
-    label_parser.set_defaults(func=cmd_set_label)
+    # set_parser = subparsers.add_parser("set", help="Set label for target nodes")
+    # set_subparsers = set_parser.add_subparsers(dest="set_command", required=True)
+    # label_parser = set_subparsers.add_parser(
+    #     "label",
+    #     help="Configure label selectors used to filter target and initiator nodes",
+    # )
+    # label_parser.add_argument(
+    #     "--target",
+    #     default=DEFAULT_TARGET_SELECTOR,
+    #     help="Label selector used to identify target nodes",
+    # )
+    # label_parser.set_defaults(func=cmd_set_label)
 
     describe_parser = subparsers.add_parser(
         "describe", help="Detailed iSCSI resource descriptions"
@@ -198,17 +197,17 @@ def build_parser() -> argparse.ArgumentParser:
     describe_subparsers = describe_parser.add_subparsers(
         dest="describe_command", required=True
     )
+
     # cmd: describe node
     node_parser = describe_subparsers.add_parser(
         "node",
         parents=[out_file_parent],
-        help="Show a detailed iSCSI summary for one node",
+        help="Show a detailed iSCSI summary for a node",
     )
-    node_parser.add_argument("--node", default=None, help="Node name to inspect")
+    node_parser.add_argument("node", nargs="?", help="Node name to inspect")
     node_parser.add_argument(
-        "--metrics", action="store_true", default=False, help="Include LUN metrics"
+        "--metrics", action="store_true", help="Include LUN metrics"
     )
-
     node_parser.set_defaults(func=cmd_describe_node)
 
     # cmd: describe config
