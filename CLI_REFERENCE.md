@@ -10,13 +10,13 @@ Centralized management utility for retrieving and managing iSCSI target, initiat
 iscsi
 ├── get
 │   ├── nodes
-│   ├── configs
-│   ├── luns
 │   ├── tpgts
+│   ├── luns
 │   ├── images
 │   ├── metrics
 │   ├── sessions
 │   ├── mount-status
+│   ├── configs
 │   └── errors
 └── describe
     └── node
@@ -29,8 +29,8 @@ iscsi
 | Command                                       | Category             | Description                                   |
 | :-------------------------------------------- | :------------------- | :-------------------------------------------- |
 | [`iscsi get nodes`](#get-nodes)               | Nodes                | List discovered target and/or initiator nodes |
-| [`iscsi get luns`](#get-luns)                 | LUNs                 | List LUNs configured on target nodes          |
 | [`iscsi get tpgts`](#get-tpgts)               | TPGTs                | Display Target Portal Groups on target nodes  |
+| [`iscsi get luns`](#get-luns)                 | LUNs                 | List LUNs configured on target nodes          |
 | [`iscsi get images`](#get-images)             | Images               | Show projected RootFS and PE images           |
 | [`iscsi get metrics`](#get-metrics)           | Metrics              | Retrieve read metrics/IOPS statistics per LUN |
 | [`iscsi get sessions`](#get-sessions)         | Sessions             | Show detailed initiator session information   |
