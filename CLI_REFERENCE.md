@@ -36,7 +36,7 @@ iscsi
 | [`iscsi get sessions`](#get-sessions)         | Sessions             | Show detailed initiator session information   |
 | [`iscsi get mount-status`](#get-mount-status) | Mount Status         | Show mount status of disks on initiator nodes |
 | [`iscsi get errors`](#get-errors)             | Logs & Errors        | Scan logs for storage and network errors      |
-| [`iscsi get configs`](#get-configs)           | Target Configuration | List target node configuration versions       |               |
+| [`iscsi get configs`](#get-configs)           | Target Configuration | Retrieves the target configuration versions   |
 | [`iscsi describe node`](#describe-node)       | Description          | Show detailed summary of a specific node      |
 
 ---
