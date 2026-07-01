@@ -240,14 +240,18 @@ def format_luns_output(payload: dict) -> str:
         lines.append(f"Node: {payload['node']}")
         lines.append(f"Role: {payload.get('role', 'target')}")
         luns = payload.get("luns", [])
-        tpgt = luns[0].get("tpgt", {})
-        lines.append(f"IQN: {tpgt.get("iqn","")}")
-        lines.append(f"TPGT: {tpgt.get("tpgt_name","")}")
         image_filter = payload.get("image_type", "all")
         if image_filter != "all":
             lines.append(f"Filter: {image_filter}")
         lines.append(f"LUNs: {payload.get('count', len(luns))}")
+        if payload.get("errors"):
+            lines.append("Warnings:")
+            lines.extend(f"- {message}" for message in payload["errors"])
+
         if luns:
+            tpgt = luns[0].get("tpgt", {})
+            lines.append(f"IQN: {tpgt.get('iqn', '')}")
+            lines.append(f"TPGT: {tpgt.get('tpgt_name', '')}")
             with_metrics = payload.get("with_metrics", False)
             headers = [
                 "LUN ID",
@@ -287,6 +291,9 @@ def format_tpgts_output(payload: dict) -> str:
         lines.append(f"Role: {payload.get('role', 'target')}")
         tpgts = payload.get("tpgts", [])
         lines.append(f"TPGTs: {payload.get('count', len(tpgts))}")
+        if payload.get("errors"):
+            lines.append("Warnings:")
+            lines.extend(f"- {message}" for message in payload["errors"])
         if tpgts:
             rows = []
             for tpgt in tpgts:
@@ -317,6 +324,9 @@ def format_images_output(payload: dict) -> str:
         if image_filter != "all":
             lines.append(f"Filter: {image_filter}")
         lines.append(f"Images: {payload.get('count', len(images))}")
+        if payload.get("errors"):
+            lines.append("Warnings:")
+            lines.extend(f"- {message}" for message in payload["errors"])
         if images:
             with_metrics = payload.get("with_metrics", False)
             headers = ["Image Name", "Type", "Image Path"]
@@ -395,7 +405,7 @@ def _format_initiator_mount_status_summary(summary: dict) -> str:
         f"Node: {summary.get('node', 'unknown')}",
         f"Role: {summary.get('role', 'initiator')}",
         f"Mounted: {summary.get('mounted',0)}",
-        f"Unmounted: {summary.get('unmounted',0)}", 
+        f"Unmounted: {summary.get('unmounted',0)}",
         "",
         _format_mount_status_table(summary.get("mounts", [])),
     ]
@@ -412,7 +422,7 @@ def format_mount_status_output(payload: dict) -> str:
         total_mounted = sum(summary.get("mounted", 0) for summary in nodes)
         total_unmounted = sum(summary.get("unmounted", 0) for summary in nodes)
         lines = [
-            f"Total Mounted: {total_mounted}", 
+            f"Total Mounted: {total_mounted}",
             f"Total Unmounted: {total_unmounted}",
             "",
         ]
@@ -745,6 +755,7 @@ def format_configs_output(payloads: list[dict]) -> str:
         node = payload.get("node", "")
         current_config = payload.get("current_config")
         versions = payload.get("versions", [])
+        errors = payload.get("errors", [])
 
         headers = ["TYPE", "DATE", "FILE", "LOCAL PATH"]
         rows = []
@@ -770,6 +781,25 @@ def format_configs_output(payloads: list[dict]) -> str:
                     filepath,
                 ]
             )
+
+        if errors:
+            sections.append(
+                "\n".join(
+                    [
+                        f"Node: {node}",
+                        "",
+                        "Warnings:",
+                        *[f"- {message}" for message in errors],
+                        "",
+                        (
+                            render_table(headers, rows)
+                            if rows
+                            else "No configurations found"
+                        ),
+                    ]
+                )
+            )
+            continue
 
         sections.append(
             "\n".join(

@@ -52,6 +52,7 @@ from .formatter import (
 
 from .schemas import (
     CLIParameterError,
+    KubernetesError,
     TargetConfigurationError,
 )
 
@@ -59,6 +60,14 @@ try:
     DEFAULT_TARGET_SELECTOR = get_target_node_label()
 except Exception:
     DEFAULT_TARGET_SELECTOR = "iscsi-role=target"
+
+
+def _get_node_role_or_error(node_name: str) -> str:
+    try:
+        labels = get_node_labels(node_name)
+    except KubernetesError as exc:
+        raise KubernetesError(f"Unable to inspect node '{node_name}': {exc}") from exc
+    return detect_node_role(labels)
 
 
 # get commands
@@ -89,8 +98,7 @@ def cmd_get_nodes(args) -> None:
 def cmd_get_luns(args) -> None:
     with_metrics = True if args.metrics else False
     if args.node:
-        labels = get_node_labels(args.node)
-        role = detect_node_role(labels)
+        role = _get_node_role_or_error(args.node)
         if role != "target":
             raise CLIParameterError(
                 f"{args.node}: role is '{role}', this command is only valid for target nodes"
@@ -124,8 +132,7 @@ def cmd_get_luns(args) -> None:
 def cmd_get_tpgts(args) -> None:
     with_metrics = False
     if args.node:
-        labels = get_node_labels(args.node)
-        role = detect_node_role(labels)
+        role = _get_node_role_or_error(args.node)
         if role != "target":
             raise CLIParameterError(
                 f"{args.node}: role is '{role}', this command is only valid for target nodes"
@@ -143,8 +150,7 @@ def cmd_get_tpgts(args) -> None:
 def cmd_get_images(args) -> None:
     with_metrics = True if args.metrics else False
     if args.node:
-        labels = get_node_labels(args.node)
-        role = detect_node_role(labels)
+        role = _get_node_role_or_error(args.node)
         if role != "target":
             raise CLIParameterError(
                 f"{args.node}: role is '{role}', this command is only valid for target nodes"
@@ -191,8 +197,7 @@ def cmd_get_images(args) -> None:
 def cmd_get_metrics(args) -> None:
     if args.node:
         node_name = args.node
-        labels = get_node_labels(node_name)
-        role = detect_node_role(labels)
+        role = _get_node_role_or_error(node_name)
         if role == "target":
             summary = build_target_node_summary(node_name, with_metrics=True)
             emit_output(
@@ -218,8 +223,7 @@ def cmd_get_metrics(args) -> None:
 
 def cmd_get_sessions(args) -> None:
     if args.node:
-        labels = get_node_labels(args.node)
-        role = detect_node_role(labels)
+        role = _get_node_role_or_error(args.node)
         if role != "initiator":
             raise CLIParameterError(
                 f"{args.node}: role is '{role}', this command is only valid for initiator nodes"
@@ -233,8 +237,7 @@ def cmd_get_sessions(args) -> None:
 
 def cmd_get_mount_status(args) -> None:
     if args.node:
-        labels = get_node_labels(args.node)
-        role = detect_node_role(labels)
+        role = _get_node_role_or_error(args.node)
         if role != "initiator":
             raise CLIParameterError(
                 f"{args.node}: role is '{role}', this command is only valid for initiator nodes"
@@ -248,8 +251,7 @@ def cmd_get_mount_status(args) -> None:
 
 def cmd_get_configs(args) -> None:
     if args.node:
-        labels = get_node_labels(args.node)
-        role = detect_node_role(labels=labels)
+        role = _get_node_role_or_error(args.node)
         if role != "target":
             raise CLIParameterError(
                 f"{args.node}: role is '{role}', this command is only valid for target nodes"
@@ -264,12 +266,21 @@ def cmd_get_configs(args) -> None:
         nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
 
         def collect_node_config(node: str) -> dict:
-            current, versions = list_config_versions(node)
-            return {
-                "node": node,
-                "current_config": current,
-                "versions": versions,
-            }
+            try:
+                current, versions = list_config_versions(node)
+                return {
+                    "node": node,
+                    "current_config": current,
+                    "versions": versions,
+                    "errors": [],
+                }
+            except Exception as exc:
+                return {
+                    "node": node,
+                    "current_config": None,
+                    "versions": [],
+                    "errors": [str(exc)],
+                }
 
         with ThreadPoolExecutor(max_workers=min(32, len(nodes))) as executor:
             payload = list(executor.map(collect_node_config, nodes))
@@ -328,8 +339,7 @@ def cmd_get_errors(args) -> None:
 def cmd_describe_node(args) -> None:
     if args.node:
         node_name = args.node
-        labels = get_node_labels(node_name)
-        role = detect_node_role(labels)
+        role = _get_node_role_or_error(node_name)
         if role == "initiator":
             summary = build_initiator_node_summary(node_name)
             emit_output(
@@ -415,30 +425,62 @@ def cmd_describe_config(args) -> None:
         raise CLIParameterError("Please provide the node name with --node flag")
     else:
         nodes = get_kubernetes_nodes(DEFAULT_TARGET_SELECTOR)
-        jobs = []
+        config_summaries = []
         for node in nodes:
-            current, versions = list_config_versions(node)
+            try:
+                current, versions = list_config_versions(node)
+            except Exception as exc:
+                config_summaries.append(
+                    {
+                        "node": node,
+                        "current_config": None,
+                        "versions": [],
+                        "errors": [str(exc)],
+                    }
+                )
+                continue
+
+            jobs = []
             version_paths = [version[0] for version in versions]
-            version_paths.append(current)
+            if current:
+                version_paths.append(current)
             jobs.extend((node, path) for path in version_paths)
 
-        with ThreadPoolExecutor(max_workers=min(32, len(jobs))) as executor:
-            results = list(
-                executor.map(
-                    lambda job: build_backup_config_summary(*job),
-                    jobs,
+            if not jobs:
+                config_summaries.append(
+                    {
+                        "node": node,
+                        "current_config": None,
+                        "versions": [],
+                        "errors": ["No configuration versions found"],
+                    }
                 )
-            )
+                continue
 
-        config_summaries = []
-        for summary, error in results:
-            if error:
-                raise TargetConfigurationError(
-                    summary.get("node", "unknown") if summary else "unknown",
-                    f"Error describing config: {error}",
+            with ThreadPoolExecutor(max_workers=min(32, len(jobs))) as executor:
+                results = list(
+                    executor.map(
+                        lambda job: build_backup_config_summary(*job),
+                        jobs,
+                    )
                 )
 
-            config_summaries.append(summary)
+            node_errors = []
+            for summary, error in results:
+                if error:
+                    node_errors.append(error)
+                    continue
+                config_summaries.append(summary)
+
+            if node_errors:
+                config_summaries.append(
+                    {
+                        "node": node,
+                        "current_config": None,
+                        "versions": [],
+                        "errors": node_errors,
+                    }
+                )
         emit_output(
             config_summaries,
             formatter=format_target_summary,

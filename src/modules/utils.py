@@ -2,12 +2,24 @@ from __future__ import annotations
 
 import re
 import subprocess
+from subprocess import TimeoutExpired
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from .schemas import RemoteCommandError
 
-def run_command(command: str) -> subprocess.CompletedProcess:
-    return subprocess.run(command, shell=True, capture_output=True, text=True)
+COMMAND_TIMEOUT_SECONDS = 30
+
+
+def run_command(
+    command: str, timeout_seconds: int = COMMAND_TIMEOUT_SECONDS
+) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        command,
+        shell=True,
+        capture_output=True,
+        text=True,
+        timeout=timeout_seconds,
+    )
 
 
 def _clean_pdsh_output(output: str) -> List[str]:
@@ -24,7 +36,13 @@ def _clean_pdsh_output(output: str) -> List[str]:
 
 
 def run_pdsh_lines(command: str) -> List[str]:
-    result = run_command(command)
+    try:
+        result = run_command(command)
+    except TimeoutExpired as exc:
+        match = re.search(r'pdsh\s+-w\s+([^\s"]+)', command)
+        node = match.group(1) if match else None
+        reason = f"timed out after {COMMAND_TIMEOUT_SECONDS} seconds"
+        raise RemoteCommandError(node=node, command=command, reason=reason) from exc
     if result.returncode != 0:
         message = (
             result.stderr.strip()
@@ -40,7 +58,6 @@ def run_pdsh_lines(command: str) -> List[str]:
 def run_pdsh_text(command: str) -> str:
     lines = run_pdsh_lines(command)
     return "\n".join(lines).strip()
-
 
 
 def _parse_pdsh_output_by_node(
@@ -68,20 +85,32 @@ def run_pdsh_text_by_node(
         return {}, None
 
     node_expr = ",".join(sorted(set(normalized)))
-    result = run_command(f'pdsh -w {node_expr} "{remote_command}"')
-    grouped = _parse_pdsh_output_by_node(result.stdout, normalized)
+    try:
+        result = run_command(f'pdsh -w {node_expr} "{remote_command}"')
+        stdout = result.stdout
+        stderr = result.stderr
+        returncode = result.returncode
+        timeout_message = None
+    except TimeoutExpired as exc:
+        stdout = exc.stdout or ""
+        stderr = exc.stderr or ""
+        returncode = None
+        timeout_message = f"timed out after {COMMAND_TIMEOUT_SECONDS} seconds"
+
+    grouped = _parse_pdsh_output_by_node(stdout, normalized)
     payload = {
         node: "\n".join(lines).strip()
         for node, lines in grouped.items()
         if "\n".join(lines).strip()
     }
 
-    if result.returncode != 0 and not payload:
-        message = (
-            result.stderr.strip()
-            or result.stdout.strip()
-            or f"exit {result.returncode}"
-        )
+    if timeout_message:
+        if payload:
+            return payload, timeout_message
+        return {}, timeout_message
+
+    if returncode != 0 and not payload:
+        message = stderr.strip() or stdout.strip() or f"exit {returncode}"
         return {}, message
 
     return payload, None
